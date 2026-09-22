@@ -1,0 +1,17 @@
+import AppShell from '@/Layouts/AppShell';
+import { Badge, Card, EmptyState, PageHeader, Pagination } from '@/Components/ui';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Filter } from 'lucide-react';
+import { PageProps } from '@/types';
+
+type Submission = { id: number; status: string; grade?: { final_score: string; status: string }; student?: { name: string }; delivery?: { classroom?: { name: string }; assignment_version?: { assignment?: { title: string } } } };
+type Option = { id: number; name?: string; title?: string };
+type Props = { submissions?: { data?: Submission[]; links?: Array<{ url: string | null; label: string; active: boolean }> }; classrooms?: Option[]; lessons?: Option[]; filters?: { classroom_id?: string; lesson_id?: string } };
+
+export default function Gradebook({ submissions, classrooms = [], lessons = [], filters = {} }: Props) {
+    const { auth } = usePage<PageProps>().props;
+    const prefix = auth.role === 'ADMIN' ? '/admin' : '/teacher';
+    const rows = submissions?.data ?? [];
+    const apply = (key: 'classroom_id' | 'lesson_id', value: string) => router.get(`${prefix}/gradebook`, { ...filters, [key]: value || undefined }, { preserveState: true, replace: true });
+    return <AppShell><Head title="Sổ điểm" /><PageHeader title="Sổ điểm" description="Theo dõi điểm học sinh theo bài học và lớp học." /><Card className="mt-6 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Filter size={17} /> Bộ lọc kết quả</div><div className="mt-3 grid gap-3 md:grid-cols-2"><select className="field" value={filters.classroom_id ?? ''} onChange={(e) => apply('classroom_id', e.target.value)} aria-label="Lọc theo lớp"><option value="">Tất cả lớp phụ trách</option>{classrooms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select className="field" value={filters.lesson_id ?? ''} onChange={(e) => apply('lesson_id', e.target.value)} aria-label="Lọc theo bài học"><option value="">Tất cả bài học</option>{lessons.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div></Card><Card className="mt-4">{rows.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-5 py-3">Học sinh</th><th className="px-5 py-3">Bài học</th><th className="px-5 py-3">Lớp</th><th className="px-5 py-3">Trạng thái</th><th className="px-5 py-3">Điểm</th><th className="px-5 py-3"><span className="sr-only">Thao tác</span></th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((submission) => <tr key={submission.id}><td className="px-5 py-4 font-medium">{submission.student?.name ?? 'Học sinh không xác định'}</td><td className="px-5 py-4">{submission.delivery?.assignment_version?.assignment?.title ?? 'Bài học không xác định'}</td><td className="px-5 py-4">{submission.delivery?.classroom?.name ?? '—'}</td><td className="px-5 py-4"><Badge value={submission.status} /></td><td className="px-5 py-4">{submission.grade?.final_score ?? 'Chưa chấm'}</td><td className="px-5 py-4"><Link href={`${prefix}/submissions/${submission.id}`} className="font-medium text-indigo-600">Xem bài nộp</Link></td></tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title="Chưa có bài nộp phù hợp" description="Khi học sinh nộp bài, kết quả theo lớp và bài học sẽ xuất hiện ở đây." /></div>}<Pagination links={submissions?.links ?? []} /></Card></AppShell>;
+}

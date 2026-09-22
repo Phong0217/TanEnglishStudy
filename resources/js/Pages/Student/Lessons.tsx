@@ -1,0 +1,8 @@
+import AppShell from '@/Layouts/AppShell';
+import { Card, EmptyState, PageHeader, Pagination } from '@/Components/ui';
+import { Head, Link } from '@inertiajs/react';
+import { ArrowRight, BookOpen } from 'lucide-react';
+type Lesson = { id: number; title: string; description?: string; estimated_duration_minutes?: number; unit: { title: string; course_version: { course: { title: string } } } };
+export default function Lessons({ lessons }: { lessons: { data: Lesson[]; links: Array<{ url: string | null; label: string; active: boolean }> } }) {
+    return <AppShell><Head title="Bài học" /><PageHeader title="Bài học của tôi" description="Tiếp tục học từ những nội dung đã được giáo viên xuất bản." /><div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{lessons.data.map((l) => <Card key={l.id} className="student-card"><div className="grid h-11 w-11 place-items-center rounded-xl bg-indigo-50 text-indigo-600"><BookOpen size={21} /></div><h2 className="mt-4 text-lg font-semibold text-slate-900">{l.title}</h2><p className="mt-1 text-sm text-slate-500">{l.unit.course_version.course.title} · {l.unit.title}</p><p className="mt-3 flex-1 text-sm text-slate-600">{l.description || 'Mở bài học để bắt đầu học.'}</p><div className="student-card-action"><Link href={`/student/lessons/${l.id}`} className="btn btn-primary btn-lg w-full">Mở bài học <ArrowRight size={16} /></Link></div></Card>)}{!lessons.data.length && <div className="md:col-span-2"><EmptyState title="Chưa có bài học được xuất bản" description="Bài học đã xuất bản từ các lớp của bạn sẽ xuất hiện ở đây." /></div>}</div><Pagination links={lessons.links} /></AppShell>;
+}

@@ -1,0 +1,8 @@
+import AppShell from '@/Layouts/AppShell';
+import { Badge, Card, EmptyState, PageHeader } from '@/Components/ui';
+import { Head } from '@inertiajs/react';
+import { School, Users } from 'lucide-react';
+type Classroom = { id: number; name: string; code: string; status: string; course_version: { title: string; course: { title: string } }; primary_teacher?: { name: string } };
+export default function Classes({ classes }: { classes: Classroom[] }) {
+    return <AppShell><Head title="Lớp của tôi" /><PageHeader title="Lớp học của tôi" description="Các lớp đang học, khóa học và giáo viên phụ trách." /><div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{classes.map((c) => <Card key={c.id} className="student-card"><div className="flex items-start justify-between gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-700"><School size={21} /></div><Badge value={c.status} /></div><h2 className="mt-4 text-xl font-semibold text-slate-900">{c.name}</h2><p className="mt-2 text-sm text-slate-600">{c.course_version.course.title}</p><p className="mt-1 text-sm text-slate-500">{c.course_version.title}</p><div className="mt-auto flex items-center gap-2 border-t border-slate-100 pt-4 text-sm text-slate-600"><Users size={16} className="text-slate-400" />Giáo viên: {c.primary_teacher?.name || 'Đội ngũ giáo viên'}</div></Card>)}{!classes.length && <div className="md:col-span-2"><EmptyState title="Chưa có lớp học đang hoạt động" description="Lớp học sẽ xuất hiện sau khi trung tâm hoàn tất việc ghi danh." /></div>}</div></AppShell>;
+}
