@@ -20,8 +20,8 @@ class CreateAssignmentAction
         return DB::transaction(function () use ($actor, $data) {
             $sourceLessonVersionId = null;
             if (! empty($data['source_lesson_id'])) {
-                $sourceLesson = Lesson::with('publishedVersion', 'unit.courseVersion.course')->findOrFail($data['source_lesson_id']);
-                abort_unless($sourceLesson->unit->courseVersion->course->center_id === $actor->center_id, 403);
+                $sourceLesson = Lesson::with('publishedVersion', 'creator')->findOrFail($data['source_lesson_id']);
+                abort_unless($sourceLesson->creator?->center_id === $actor->center_id, 403);
                 $sourceLessonVersionId = $sourceLesson->published_version_id;
             }
             $assignment = Assignment::create(['center_id' => $actor->center_id, 'source_lesson_id' => $data['source_lesson_id'] ?? null, 'title' => $data['title'], 'description' => $data['description'] ?? null, 'status' => 'DRAFT', 'created_by' => $actor->id]);
@@ -31,8 +31,8 @@ class CreateAssignmentAction
             foreach ($data['items'] as $input) {
                 $source = isset($input['question_version_id'])
                     ? QuestionVersion::with('question')->findOrFail($input['question_version_id'])
-                    : LessonBlock::with('lesson.unit.courseVersion.course')->findOrFail($input['lesson_block_id']);
-                $centerId = $source instanceof QuestionVersion ? $source->question->center_id : $source->lesson->unit->courseVersion->course->center_id;
+                    : LessonBlock::with('lesson.creator')->findOrFail($input['lesson_block_id']);
+                $centerId = $source instanceof QuestionVersion ? $source->question->center_id : $source->lesson->creator?->center_id;
                 if ($centerId !== $actor->center_id) {
                     throw ValidationException::withMessages(['items' => 'Every item must belong to your center.']);
                 }

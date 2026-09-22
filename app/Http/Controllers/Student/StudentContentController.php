@@ -23,8 +23,8 @@ class StudentContentController extends Controller
 
     public function lessons(Request $request): Response
     {
-        $versionIds = Classroom::whereHas('enrollments', fn ($q) => $q->where('student_id', $request->user()->id)->where('status', 'ACTIVE'))->pluck('course_version_id');
-        $lessons = Lesson::with('unit.courseVersion.course')->where('status', 'PUBLISHED')->whereHas('unit', fn ($q) => $q->whereIn('course_version_id', $versionIds))->orderBy('position')->paginate(15);
+        $classIds = $request->user()->enrollments()->where('status', 'ACTIVE')->pluck('classroom_id');
+        $lessons = Lesson::where('status', 'PUBLISHED')->whereHas('assignments.versions.deliveries', fn ($q) => $q->whereIn('classroom_id', $classIds)->whereIn('status', ['OPEN', 'SCHEDULED']))->latest('published_at')->paginate(15);
 
         return Inertia::render('Student/Lessons', ['lessons' => $lessons]);
     }

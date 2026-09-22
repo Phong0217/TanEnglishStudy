@@ -44,4 +44,9 @@ class Lesson extends Model
     {
         return $this->hasMany(Assignment::class, 'source_lesson_id');
     }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

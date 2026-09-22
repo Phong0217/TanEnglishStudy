@@ -5,6 +5,7 @@ namespace App\Domain\Classrooms;
 use App\Enums\RoleName;
 use App\Models\Classroom;
 use App\Models\Enrollment;
+use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -36,8 +37,18 @@ class StudentClassImportService
                 $classroom = $classQuery->first();
                 if (! $classroom) { $result['errors'][] = "Dòng {$line}: lớp '{$classValue}' không tồn tại hoặc bạn không có quyền."; continue; }
                 $student = User::role(RoleName::STUDENT->value)->where('center_id', $actor->center_id)->where('email', $email)->first();
-                if ($student) { $student->update(['name' => $name, 'password' => Hash::make($password), 'status' => 'ACTIVE']); $result['updated']++; }
-                else { $student = User::create(['center_id' => $actor->center_id, 'name' => $name, 'email' => $email, 'password' => Hash::make($password), 'status' => 'ACTIVE']); $student->assignRole(RoleName::STUDENT->value); $result['created']++; }
+                if ($student) {
+                    $student->update(['name' => $name, 'password' => Hash::make($password), 'status' => 'ACTIVE']);
+                    if (! $student->studentProfile) {
+                        StudentProfile::create(['user_id' => $student->id, 'student_code' => $this->studentCode($student), 'joined_at' => now()->toDateString()]);
+                    }
+                    $result['updated']++;
+                } else {
+                    $student = User::create(['center_id' => $actor->center_id, 'name' => $name, 'email' => $email, 'password' => Hash::make($password), 'status' => 'ACTIVE']);
+                    $student->assignRole(RoleName::STUDENT->value);
+                    StudentProfile::create(['user_id' => $student->id, 'student_code' => $this->studentCode($student), 'joined_at' => now()->toDateString()]);
+                    $result['created']++;
+                }
                 $enrollment = Enrollment::updateOrCreate(['classroom_id' => $classroom->id, 'student_id' => $student->id], ['status' => 'ACTIVE', 'enrolled_at' => now(), 'completed_at' => null, 'withdrawn_at' => null, 'created_by' => $actor->id, 'updated_by' => $actor->id]);
                 if ($enrollment->wasRecentlyCreated) $result['enrolled']++;
             }
@@ -59,4 +70,5 @@ class StudentClassImportService
 
     private function header(string $value): string { return Str::of($value)->lower()->ascii()->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->value(); }
     private function findHeader(array $headers, array $aliases): ?string { foreach ($aliases as $alias) if (in_array($alias, $headers, true)) return $alias; return null; }
+    private function studentCode(User $student): string { return 'STU-'.$student->id; }
 }

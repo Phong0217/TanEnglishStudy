@@ -22,9 +22,9 @@ class AssignLessonAction
     public function execute(User $actor, Lesson $lesson, array $data): Collection
     {
         return DB::transaction(function () use ($actor, $lesson, $data) {
-            $lesson = Lesson::with('unit.courseVersion.course', 'publishedVersion.blocks')->lockForUpdate()->findOrFail($lesson->id);
+            $lesson = Lesson::with('creator', 'publishedVersion.blocks')->lockForUpdate()->findOrFail($lesson->id);
             abort_unless($lesson->status->value === 'PUBLISHED' && $lesson->publishedVersion, 422, 'Publish the lesson before assigning it.');
-            abort_unless($lesson->unit->courseVersion->course->center_id === $actor->center_id, 403);
+            abort_unless($lesson->creator?->center_id === $actor->center_id, 403);
 
             $classrooms = Classroom::where('center_id', $actor->center_id)
                 ->whereIn('id', $data['classroom_ids'])

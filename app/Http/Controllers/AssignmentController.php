@@ -30,7 +30,7 @@ class AssignmentController extends Controller
             $query->where('created_by', $request->user()->id);
         }
 
-        return Inertia::render('Assignments/Index', ['assignments' => $query->latest()->paginate(15), 'questions' => QuestionVersion::with('question')->whereIn('question_id', app(AuthoringScope::class)->questions($request->user())->where('status', 'APPROVED')->select('id'))->latest()->limit(100)->get(), 'lessonBlocks' => LessonBlock::with('lesson.unit.courseVersion.course')->whereHas('lesson.unit.courseVersion.course', fn ($q) => $q->where('center_id', $request->user()->center_id))->where('points', '>', 0)->limit(100)->get(), 'classrooms' => $this->allowedClassrooms($request)]);
+        return Inertia::render('Assignments/Index', ['assignments' => $query->latest()->paginate(15), 'questions' => QuestionVersion::with('question')->whereIn('question_id', app(AuthoringScope::class)->questions($request->user())->where('status', 'APPROVED')->select('id'))->latest()->limit(100)->get(), 'lessonBlocks' => LessonBlock::with('lesson.creator')->whereHas('lesson.creator', fn ($q) => $q->where('center_id', $request->user()->center_id))->where('points', '>', 0)->limit(100)->get(), 'classrooms' => $this->allowedClassrooms($request)]);
     }
 
     public function store(StoreAssignmentRequest $request, CreateAssignmentAction $action, AppLogger $logger): RedirectResponse

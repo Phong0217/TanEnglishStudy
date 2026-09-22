@@ -10,26 +10,22 @@ class LessonPolicy
 {
     private function centerId(Lesson $lesson): int
     {
-        return $lesson->unit->courseVersion->course->center_id;
+        return (int) $lesson->creator()->value('center_id');
     }
 
     public function view(User $user, Lesson $lesson): bool
     {
-        if ($user->center_id !== $this->centerId($lesson)) {
-            return false;
-        }if ($user->hasRole(RoleName::ADMIN->value)) {
-            return true;
-        }$versionId = $lesson->unit->course_version_id;
-        if ($user->hasRole(RoleName::TEACHER->value)) {
-            return $user->teachingAssignments()->where('status', 'ACTIVE')->whereHas('classroom', fn ($q) => $q->where('course_version_id', $versionId))->exists();
-        }
+        if ($user->center_id !== $this->centerId($lesson)) return false;
+        if ($user->hasRole(RoleName::ADMIN->value)) return true;
+        if ($user->hasRole(RoleName::TEACHER->value)) return $lesson->created_by === $user->id;
 
-        return $lesson->status->value === 'PUBLISHED' && $user->enrollments()->where('status', 'ACTIVE')->whereHas('classroom', fn ($q) => $q->where('course_version_id', $versionId))->exists();
+        return $lesson->status->value === 'PUBLISHED'
+            && $lesson->assignments()->whereHas('versions.deliveries.classroom.enrollments', fn ($q) => $q->where('student_id', $user->id)->where('status', 'ACTIVE'))->exists();
     }
 
     public function update(User $user, Lesson $lesson): bool
     {
-        return $this->view($user, $lesson) && ($user->hasRole(RoleName::ADMIN->value) || $lesson->created_by === $user->id || ($user->hasRole(RoleName::TEACHER->value) && $user->teachingAssignments()->where('status', 'ACTIVE')->whereHas('classroom', fn ($q) => $q->where('course_version_id', $lesson->unit->course_version_id))->exists()));
+        return $this->view($user, $lesson) && ($user->hasRole(RoleName::ADMIN->value) || $lesson->created_by === $user->id);
     }
 
     public function publish(User $user, Lesson $lesson): bool

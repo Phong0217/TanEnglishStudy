@@ -12,7 +12,7 @@ use App\Http\Requests\Assessment\AssignLessonRequest;
 use App\Models\Lesson;
 use App\Models\LessonBlock;
 use App\Models\LessonVersion;
-use App\Models\Unit;
+use App\Models\User;
 use App\Support\Logging\AppLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -27,27 +27,42 @@ class LessonController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = Lesson::with('unit.courseVersion.course')->withCount('blocks')->whereHas('unit.courseVersion.course', fn ($q) => $q->where('center_id', $request->user()->center_id));
-        $unitQuery = Unit::with('courseVersion.course')->whereHas('courseVersion.course', fn ($q) => $q->where('center_id', $request->user()->center_id));
-        if ($request->user()->hasRole(RoleName::TEACHER->value)) {
-            $versions = $request->user()->teachingAssignments()->where('status', 'ACTIVE')->with('classroom:id,course_version_id')->get()->pluck('classroom.course_version_id');
-            $query->whereHas('unit', fn ($q) => $q->whereIn('course_version_id', $versions));
-            $unitQuery->whereIn('course_version_id', $versions);
+        $isAdmin = $request->user()->hasRole(RoleName::ADMIN->value);
+        $query = Lesson::with(['unit', 'creator:id,name,email'])->withCount('blocks')->whereHas('creator', fn ($q) => $q->where('center_id', $request->user()->center_id));
+        if (! $isAdmin) {
+            $query->where('created_by', $request->user()->id);
+        } else {
+            if ($request->filled('teacher_id')) {
+                $query->where('created_by', (int) $request->input('teacher_id'));
+            }
+            if ($request->filled('classroom_id')) {
+                $classroomId = (int) $request->input('classroom_id');
+                $query->whereHas('assignments.versions.deliveries', fn ($q) => $q->where('classroom_id', $classroomId));
+            }
+            if ($request->filled('date')) {
+                $query->whereDate('lessons.created_at', $request->input('date'));
+            }
         }
 
-        return Inertia::render('Lessons/Index', ['lessons' => $query->latest()->paginate(15)->through(fn ($lesson) => ['id' => $lesson->id, 'title' => $lesson->title, 'status' => $lesson->status->value, 'unit' => $lesson->unit->title, 'course' => $lesson->unit->courseVersion->course->title, 'blocksCount' => $lesson->blocks_count, 'canEdit' => $request->user()->can('update', $lesson)]), 'units' => $unitQuery->orderBy('title')->get()->map(fn ($unit) => ['id' => $unit->id, 'title' => $unit->title, 'course' => $unit->courseVersion->course->title])]);
+        $teachers = $isAdmin ? User::role(RoleName::TEACHER->value)->where('center_id', $request->user()->center_id)->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']) : collect();
+        $classrooms = $isAdmin ? \App\Models\Classroom::where('center_id', $request->user()->center_id)->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name', 'code']) : collect();
+        $filters = $request->only(['teacher_id', 'classroom_id', 'date']);
+
+        return Inertia::render('Lessons/Index', [
+            'lessons' => $query->latest('lessons.created_at')->paginate(15)->withQueryString()->through(fn ($lesson) => ['id' => $lesson->id, 'title' => $lesson->title, 'status' => $lesson->status->value, 'unit' => $lesson->unit?->title, 'course' => null, 'blocksCount' => $lesson->blocks_count, 'createdAt' => $lesson->created_at?->toISOString(), 'createdBy' => $lesson->creator?->name, 'canEdit' => $request->user()->can('update', $lesson)]),
+            'units' => [],
+            'teachers' => $teachers,
+            'classrooms' => $classrooms,
+            'filters' => $filters,
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['unit_id' => ['required', 'integer', 'exists:units,id'], 'title' => ['required', 'string', 'max:255']]);
-        $unit = Unit::with('courseVersion.course')->findOrFail($data['unit_id']);
-        abort_unless($unit->courseVersion->course->center_id === $request->user()->center_id, 404);
-        if ($request->user()->hasRole(RoleName::TEACHER->value)) {
-            abort_unless($request->user()->teachingAssignments()->where('status', 'ACTIVE')->whereHas('classroom', fn ($q) => $q->where('course_version_id', $unit->course_version_id))->exists(), 403);
-        }$lesson = DB::transaction(function () use ($unit, $data, $request) {
-            $position = (int) $unit->lessons()->lockForUpdate()->max('position') + 1;
-            $lesson = Lesson::create(['unit_id' => $unit->id, 'title' => $data['title'], 'position' => $position, 'status' => 'DRAFT', 'lock_version' => 1, 'created_by' => $request->user()->id]);
+        $data = $request->validate(['title' => ['required', 'string', 'max:255']]);
+        $lesson = DB::transaction(function () use ($data, $request) {
+            $position = (int) Lesson::where('created_by', $request->user()->id)->lockForUpdate()->max('position') + 1;
+            $lesson = Lesson::create(['unit_id' => null, 'title' => $data['title'], 'position' => $position, 'status' => 'DRAFT', 'lock_version' => 1, 'created_by' => $request->user()->id]);
             $lesson->versions()->create([
                 'version_number' => 1,
                 'title_snapshot' => $lesson->title,
@@ -71,7 +86,7 @@ class LessonController extends Controller
         if ($request->boolean('preview')) {
             return $this->preview($request, $lesson);
         }
-        $lesson->load('blocks', 'versions.blocks', 'publishedVersion.blocks', 'unit.courseVersion.units.lessons:id,unit_id,title,position');
+        $lesson->load('blocks', 'versions.blocks', 'publishedVersion.blocks');
         $draft = $this->draftVersion($lesson);
         $draft->load('blocks');
         $lesson->setRelation('blocks', $draft->blocks);
