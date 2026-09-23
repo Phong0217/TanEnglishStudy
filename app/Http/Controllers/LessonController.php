@@ -138,7 +138,14 @@ class LessonController extends Controller
     public function save(SaveLessonRequest $request, Lesson $lesson, AppLogger $logger): JsonResponse
     {
         $data = $request->validated();
-        $logger->debug(\App\Enums\LogService::LESSON_BUILDER, 'Lesson save started', ['lesson_id' => $lesson->id, 'lock_version' => $data['lock_version'], 'block_count' => count($data['blocks'])]);
+        $logger->debug(\App\Enums\LogService::LESSON_BUILDER, 'Lesson save started', ['lesson_id' => $lesson->id, 'lock_version' => $data['lock_version'], 'block_count' => count($data['blocks']), 'block_types' => collect($data['blocks'])->pluck('block_type')->values()->all()]);
+        // Never allow an accidental empty/stale client payload to delete a
+        // lesson that already contains blocks. An empty draft is valid only
+        // before the first block is created.
+        if (count($data['blocks']) === 0 && $this->draftVersion($lesson)->blocks()->exists()) {
+            $logger->warning(\App\Enums\LogService::LESSON_BUILDER, 'Rejected empty lesson payload', ['lesson_id' => $lesson->id, 'lock_version' => $data['lock_version']]);
+            return response()->json(['success' => false, 'message' => 'Không thể lưu dữ liệu rỗng vì Lesson hiện đã có block. Hãy tải lại trang để đồng bộ dữ liệu trước khi tiếp tục.'], 422);
+        }
         try {
             $saved = DB::transaction(function () use ($lesson, $data, $request) {
             $current = Lesson::lockForUpdate()->findOrFail($lesson->id);
