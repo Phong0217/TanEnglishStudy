@@ -12,6 +12,7 @@ use App\Http\Requests\Assessment\AssignLessonRequest;
 use App\Models\Lesson;
 use App\Models\LessonBlock;
 use App\Models\LessonVersion;
+use App\Models\LessonSet;
 use App\Models\User;
 use App\Support\Logging\AppLogger;
 use Illuminate\Http\JsonResponse;
@@ -54,6 +55,7 @@ class LessonController extends Controller
             'teachers' => $teachers,
             'classrooms' => $classrooms,
             'filters' => $filters,
+            'lessonSets' => LessonSet::with(['items.lesson:id,title,status'])->where('center_id', $request->user()->center_id)->when(! $isAdmin, fn ($query) => $query->where('created_by', $request->user()->id))->latest()->get(['id', 'title', 'status', 'created_by', 'created_at']),
         ]);
     }
 

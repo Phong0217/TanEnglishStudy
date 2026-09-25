@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ClassroomController as AdminClassroomController;
+use App\Http\Controllers\Admin\CenterSettingsController;
 use App\Http\Controllers\Admin\CourseController as AdminCourseController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\AiGenerationController;
@@ -28,6 +29,7 @@ Route::get('/dashboard', fn () => redirect()->route(strtolower(auth()->user()->g
 
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/media-assets/{mediaAsset}/stream', [MediaAssetController::class, 'stream'])->name('media-assets.stream');
+    Route::get('/center/logo', [CenterSettingsController::class, 'logo'])->name('center.logo');
     foreach (['admin' => 'ADMIN', 'teacher' => 'TEACHER'] as $prefix => $role) {
         Route::prefix($prefix)->name($prefix.'.')->middleware('primary-role:'.$role)->group(function () {
             Route::post('/ai-documents', [DocumentController::class, 'uploadMany'])->middleware('throttle:10,1')->name('ai.documents');
@@ -48,11 +50,14 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/media/audio', [MediaAssetController::class, 'storeAudio'])->name('media.audio.store');
         Route::post('/media/image', [MediaAssetController::class, 'storeImage'])->name('media.image.store');
         Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
+        Route::get('/settings/center', [CenterSettingsController::class, 'edit'])->name('settings.center');
+        Route::post('/settings/center', [CenterSettingsController::class, 'update'])->name('settings.center.update');
         Route::get('/teachers', fn (Request $request) => app(AdminUserController::class)->index($request, 'TEACHER'))->name('teachers.index');
         Route::get('/students', fn (Request $request) => app(AdminUserController::class)->index($request, 'STUDENT'))->name('students.index');
         Route::post('/users', [AdminUserController::class, 'store'])->name('users.store');
         Route::patch('/users/{user}/status', [AdminUserController::class, 'status'])->name('users.status');
         Route::get('/classrooms', [AdminClassroomController::class, 'index'])->name('classrooms.index');
+        Route::get('/classrooms/{classroom}', [ClassroomViewerController::class, 'show'])->name('classrooms.show');
         Route::post('/classrooms', [AdminClassroomController::class, 'store'])->name('classrooms.store');
         Route::post('/classrooms/{classroom}/teachers', [AdminClassroomController::class, 'assignTeacher'])->name('classrooms.teachers.store');
         Route::post('/classrooms/{classroom}/enrollments', [AdminClassroomController::class, 'enroll'])->name('classrooms.enrollments.store');
@@ -68,6 +73,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::delete('/lessons/{lesson}', [LessonController::class, 'destroy'])->name('lessons.destroy');
         Route::post('/lessons/{lesson}/publish', [LessonController::class, 'publish'])->name('lessons.publish');
         Route::post('/lessons/{lesson}/assign', [LessonController::class, 'assign'])->name('lessons.assign');
+        Route::post('/lesson-sets', [\App\Http\Controllers\LessonSetController::class, 'store'])->name('lesson-sets.store');
+        Route::delete('/lesson-sets/{lessonSet}', [\App\Http\Controllers\LessonSetController::class, 'destroy'])->name('lesson-sets.destroy');
         Route::get('/assignments', [AssignmentController::class, 'index'])->name('assignments.index');
         Route::post('/assignments', [AssignmentController::class, 'store'])->name('assignments.store');
         Route::delete('/assignments/{assignment}', [AssignmentController::class, 'destroy'])->name('assignments.destroy');
@@ -97,6 +104,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/media/image', [MediaAssetController::class, 'storeImage'])->name('media.image.store');
         Route::get('/dashboard', [DashboardController::class, 'teacher'])->name('dashboard');
         Route::get('/classes', [ClassroomViewerController::class, 'classes'])->name('classes.index');
+        Route::get('/classes/{classroom}', [ClassroomViewerController::class, 'show'])->name('classes.show');
         Route::get('/students', [ClassroomViewerController::class, 'students'])->name('students.index');
         Route::post('/classrooms/import-students', StudentImportController::class)->name('classrooms.students.import');
         Route::get('/classrooms/import-students/template', [StudentImportController::class, 'template'])->name('classrooms.students.import-template');
@@ -108,6 +116,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::delete('/lessons/{lesson}', [LessonController::class, 'destroy'])->name('lessons.destroy');
         Route::post('/lessons/{lesson}/publish', [LessonController::class, 'publish'])->name('lessons.publish');
         Route::post('/lessons/{lesson}/assign', [LessonController::class, 'assign'])->name('lessons.assign');
+        Route::post('/lesson-sets', [\App\Http\Controllers\LessonSetController::class, 'store'])->name('lesson-sets.store');
+        Route::delete('/lesson-sets/{lessonSet}', [\App\Http\Controllers\LessonSetController::class, 'destroy'])->name('lesson-sets.destroy');
         Route::get('/assignments', [AssignmentController::class, 'index'])->name('assignments.index');
         Route::post('/assignments', [AssignmentController::class, 'store'])->name('assignments.store');
         Route::delete('/assignments/{assignment}', [AssignmentController::class, 'destroy'])->name('assignments.destroy');

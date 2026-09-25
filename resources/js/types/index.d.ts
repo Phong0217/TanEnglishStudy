@@ -16,6 +16,7 @@ export type PageProps<
         permissions: string[];
     };
     appName: string;
+    center?: { id: number; name: string; code?: string; logoUrl?: string | null } | null;
     flash: { success?: string; error?: string };
     notifications: { unreadCount: number; items: Array<{ id: string; data: { title: string; message: string; url?: string }; readAt?: string }> };
 };

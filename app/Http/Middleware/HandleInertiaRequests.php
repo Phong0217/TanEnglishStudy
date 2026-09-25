@@ -36,6 +36,12 @@ class HandleInertiaRequests extends Middleware
                 'role' => fn () => $request->user()?->getRoleNames()->first(),
                 'permissions' => fn () => $request->user()?->getAllPermissions()->pluck('name')->values() ?? [],
             ],
+            'center' => fn () => ($center = $request->user()?->center) ? [
+                'id' => $center->id,
+                'name' => $center->name,
+                'code' => $center->code,
+                'logoUrl' => $center->logo_path ? route('center.logo', ['v' => $center->updated_at?->timestamp]) : null,
+            ] : null,
             'appName' => config('app.name'),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

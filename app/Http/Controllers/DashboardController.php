@@ -41,11 +41,60 @@ class DashboardController extends Controller
 
     public function student(Request $request): Response
     {
+        $studentId = $request->user()->id;
         $ids = $request->user()->enrollments()->where('status', 'ACTIVE')->pluck('classroom_id');
-        $deliveries = AssignmentDelivery::whereIn('classroom_id', $ids)->whereIn('status', ['OPEN', 'SCHEDULED']);
-        $stats = ['My Classes' => $ids->count(), 'Assignments Due' => (clone $deliveries)->whereBetween('due_at', [now(), now()->addDays(7)])->count(), 'Completed Assignments' => Submission::where('student_id', $request->user()->id)->whereIn('status', ['SUBMITTED', 'LATE', 'GRADED'])->count(), 'Released Grades' => Grade::whereHas('submission', fn ($q) => $q->where('student_id', $request->user()->id))->where('status', 'RELEASED')->count()];
+        $deliveries = AssignmentDelivery::query()
+            ->with([
+                'assignmentVersion.assignment',
+                'classroom',
+                'submissions' => fn ($query) => $query->where('student_id', $studentId)->latest('attempt_number'),
+            ])
+            ->whereIn('classroom_id', $ids)
+            ->whereIn('status', ['OPEN', 'SCHEDULED'])
+            ->whereHas('assignmentVersion.assignment')
+            ->where(function ($query): void {
+                $query->whereNull('open_at')->orWhere('open_at', '<=', now());
+            })
+            ->orderBy('due_at')
+            ->get()
+            ->filter(function (AssignmentDelivery $delivery): bool {
+                $statuses = $delivery->submissions->map(function ($submission): string {
+                    $status = $submission->status;
+                    return $status instanceof \BackedEnum ? $status->value : (string) $status;
+                });
+                return ! $statuses->intersect(['SUBMITTED', 'LATE', 'GRADED'])->isNotEmpty()
+                    || $statuses->intersect(['IN_PROGRESS', 'RETURNED'])->isNotEmpty();
+            })
+            ->unique(function (AssignmentDelivery $delivery): string {
+                $assignment = $delivery->assignmentVersion?->assignment;
+                return ($assignment?->source_lesson_id ? 'lesson:' . $assignment->source_lesson_id : 'assignment:' . ($assignment?->id ?? $delivery->id)) . ':class:' . $delivery->classroom_id;
+            })
+            ->values();
 
-        $upcoming = (clone $deliveries)->with('assignmentVersion.assignment', 'classroom')->whereHas('assignmentVersion.assignment')->where('open_at', '<=', now())->orderBy('due_at')->limit(6)->get()->map(fn ($d) => ['title' => $d->assignmentVersion?->assignment?->title ?? 'Assignment', 'classroom' => $d->classroom?->name ?? 'Classroom', 'dueAt' => $d->due_at, 'url' => route('student.assignments.show', $d)]);
+        $upcoming = $deliveries->take(6)->map(function (AssignmentDelivery $delivery): array {
+            $submissions = $delivery->submissions;
+            $latest = $submissions->sortByDesc('attempt_number')->first();
+            $status = $latest?->status;
+            $statusValue = $status instanceof \BackedEnum ? $status->value : ($status ? (string) $status : null);
+            $actionLabel = in_array($statusValue, ['IN_PROGRESS', 'RETURNED'], true) ? 'Tiếp tục làm' : 'Bắt đầu làm bài';
+
+            return [
+                'title' => $delivery->assignmentVersion?->assignment?->title ?? 'Bài học tiếng Anh',
+                'classroom' => $delivery->classroom?->name ?? 'Lớp học',
+                'dueAt' => $delivery->due_at,
+                'url' => route('student.assignments.show', $delivery),
+                'actionLabel' => $actionLabel,
+                'status' => $statusValue,
+            ];
+        })->values();
+
+        $allCompleted = Submission::where('student_id', $studentId)->whereIn('status', ['SUBMITTED', 'LATE', 'GRADED'])->count();
+        $stats = [
+            'My Classes' => $ids->count(),
+            'Assignments Due' => $upcoming->count(),
+            'Completed Assignments' => $allCompleted,
+            'Released Grades' => Grade::whereHas('submission', fn ($q) => $q->where('student_id', $studentId))->where('status', 'RELEASED')->count(),
+        ];
 
         return Inertia::render('AppDashboard', ['title' => 'Learning Home', 'stats' => $stats, 'upcoming' => $upcoming, 'recent' => []]);
     }

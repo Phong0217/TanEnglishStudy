@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AssignmentDelivery;
 use App\Models\Classroom;
 use App\Models\Grade;
-use App\Models\Lesson;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -23,8 +22,50 @@ class StudentContentController extends Controller
 
     public function lessons(Request $request): Response
     {
+        $studentId = $request->user()->id;
         $classIds = $request->user()->enrollments()->where('status', 'ACTIVE')->pluck('classroom_id');
-        $lessons = Lesson::where('status', 'PUBLISHED')->whereHas('assignments.versions.deliveries', fn ($q) => $q->whereIn('classroom_id', $classIds)->whereIn('status', ['OPEN', 'SCHEDULED']))->latest('published_at')->paginate(15);
+        $lessons = AssignmentDelivery::query()
+            ->with([
+                'assignmentVersion.assignment',
+                'classroom',
+                'submissions' => fn ($query) => $query->where('student_id', $studentId)->latest('attempt_number'),
+            ])
+            ->whereIn('classroom_id', $classIds)
+            ->whereIn('status', ['OPEN', 'SCHEDULED', 'CLOSED'])
+            ->whereHas('assignmentVersion.assignment')
+            ->orderBy('due_at')
+            ->paginate(15)
+            ->through(function (AssignmentDelivery $delivery): array {
+                $submissions = $delivery->submissions;
+                $latest = $submissions->sortByDesc('attempt_number')->first();
+                $status = $latest?->status;
+                $statusValue = $status instanceof \BackedEnum ? $status->value : ($status ? (string) $status : null);
+                $active = in_array($statusValue, ['IN_PROGRESS', 'RETURNED'], true);
+                $completed = in_array($statusValue, ['SUBMITTED', 'LATE', 'GRADED'], true);
+                $canReview = $completed && (bool) $delivery->allow_review;
+                $closed = $delivery->status === 'CLOSED';
+                $action = $active ? 'continue' : ($canReview ? 'review' : ($completed || $closed ? 'completed' : 'start'));
+                $actionLabel = $active ? 'Tiếp tục làm' : ($canReview ? 'Xem lại bài đã nộp' : ($completed ? 'Đã hoàn thành' : ($closed ? 'Đã đóng' : 'Bắt đầu làm bài')));
+
+                return [
+                    'id' => $delivery->id,
+                    'title' => $delivery->assignmentVersion?->assignment?->title ?? 'Bài học tiếng Anh',
+                    'description' => $delivery->assignmentVersion?->instructions ?? $delivery->assignmentVersion?->assignment?->description,
+                    'classroom' => $delivery->classroom?->name ?? 'Lớp học',
+                    'open_at' => $delivery->open_at,
+                    'due_at' => $delivery->due_at,
+                    'close_at' => $delivery->close_at,
+                    'status' => $statusValue,
+                    'delivery_status' => $delivery->status,
+                    'submitted' => $completed,
+                    'allow_review' => (bool) $delivery->allow_review,
+                    'action' => $action,
+                    'action_label' => $actionLabel,
+                    'attempts_used' => $submissions->count(),
+                    'max_attempts' => (int) ($delivery->max_attempts ?? 1),
+                    'url' => route('student.assignments.show', $delivery),
+                ];
+            });
 
         return Inertia::render('Student/Lessons', ['lessons' => $lessons]);
     }
