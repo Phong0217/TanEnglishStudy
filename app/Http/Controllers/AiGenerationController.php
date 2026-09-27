@@ -35,7 +35,7 @@ class AiGenerationController extends Controller
     public function store(GenerateEnglishQuestionsRequest $request, AuthoringScope $scope): RedirectResponse
     {
         $data = $request->validated();
-        $documents = $scope->documents($request->user())->where('status', 'READY')->whereIn('id', $data['document_ids'])->get();
+        $documents = $scope->documents($request->user())->whereIn('id', $data['document_ids'])->whereNotIn('status', ['FAILED', 'NEEDS_REVIEW'])->get();
         abort_unless($documents->count() === count($data['document_ids']), 403);
         $job = DB::transaction(function () use ($request, $data, $documents) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
