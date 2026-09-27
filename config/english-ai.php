@@ -7,7 +7,7 @@ return [
     'categories' => ['vocabulary' => 'Vocabulary', 'grammar' => 'Grammar', 'reading' => 'Reading', 'writing' => 'Writing', 'sentence_completion' => 'Sentence completion', 'word_form' => 'Word form', 'error_correction' => 'Error correction', 'functional_language' => 'Functional language'],
     'difficulties' => ['EASY' => 'Easy', 'MEDIUM' => 'Medium', 'HARD' => 'Hard'],
     'prompt_version' => 'english-question-generator-v2-exact-grouping',
-    'queue_connection' => env('AI_QUEUE_CONNECTION', 'database'),
+    'queue_connection' => env('AI_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database')),
     'batch_size' => 5,
     'max_attempts' => 3,
 ];

@@ -18,7 +18,7 @@ php artisan route:clear >/dev/null
 case " $* " in
     *" artisan queue:work "*|*" artisan schedule:work "*)
         echo "Waiting for database migrations..."
-        until php artisan migrate:status --no-ansi 2>/dev/null | grep -q "create_cache_table.*Ran"; do
+        until php artisan db:table jobs --no-ansi >/dev/null 2>&1; do
             sleep 2
         done
         ;;

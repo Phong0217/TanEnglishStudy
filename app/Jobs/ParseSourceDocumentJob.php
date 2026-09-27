@@ -22,6 +22,11 @@ class ParseSourceDocumentJob implements ShouldQueue
 
     public int $tries = 3;
 
+    // PDF parsing can be CPU-heavy for scanned/multi-page exam files.
+    public int $timeout = 600;
+
+    public bool $failOnTimeout = true;
+
     public function __construct(public int $documentId) {}
 
     public function handle(DocumentParser $parser): void
@@ -101,6 +106,15 @@ class ParseSourceDocumentJob implements ShouldQueue
                 unlink($temporary);
             }
         }
+    }
+
+    public function failed(?Throwable $error): void
+    {
+        $message = $error?->getMessage() ?: 'Document parsing failed.';
+        SourceDocument::withoutGlobalScopes()->whereKey($this->documentId)->update([
+            'status' => 'FAILED',
+            'error_message' => mb_substr($message, 0, 2000),
+        ]);
     }
 
     private function chunks(string $text, int $size): array
