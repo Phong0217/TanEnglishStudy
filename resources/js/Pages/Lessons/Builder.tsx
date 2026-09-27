@@ -260,7 +260,7 @@ function BuilderEditor({ lesson: initial, outline, classrooms = [] }: { lesson: 
     const remove = () => removeBlock(selected);
     const duplicate = () => {
         if (!current) return;
-        const block = { ...structuredClone(current), id: undefined, clientId: crypto.randomUUID() };
+        const block = { ...structuredClone(current), id: undefined, clientId: newClientId() };
         if (selectedParent && selected && selected !== selectedParent.clientId) {
             const children = (selectedParent.content_json.children as Json[]) ?? [];
             const index = children.findIndex((child) => String(child.clientId || child.id) === String(selected));

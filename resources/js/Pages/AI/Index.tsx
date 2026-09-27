@@ -11,6 +11,10 @@ type Job = { id: number; status: string; generated_count: number; error_message?
 type Doc = { id: number; course_version_id: number; original_name: string; status: string; error_message?: string; parser_metadata_json?: { sections?: string[] } };
 type Version = { id: number; label: string; grade_level: number | null; cefr_level: string | null };
 
+const newRequestKey = () => typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 export function Counts({ label, options, values, onChange, total }: { label: string; options: Record<string, string>; values: Record<string, number>; onChange: (value: Record<string, number>) => void; total: number }) {
     const sum = Object.values(values).reduce((a, b) => a + b, 0);
     return <fieldset className="space-y-3 rounded-xl border border-slate-200 p-4"><legend className="px-1 font-medium">{label} · {sum} / {total}</legend><div className="grid gap-3 sm:grid-cols-2">{Object.entries(options).map(([key, text]) => <label key={key}><span className="label">{text}</span><input className="field" type="number" min={0} max={60} value={values[key] ?? 0} onChange={e => onChange({ ...values, [key]: Number(e.target.value) })} /></label>)}</div>{sum !== total && <p role="alert" className="text-sm text-red-700">The total must equal {total} questions.</p>}</fieldset>;
@@ -21,7 +25,7 @@ export default function AI({ jobs, documents, courseVersions, options, providerR
     const prefix = auth.role === 'ADMIN' ? '/admin' : '/teacher';
     const [polling, setPolling] = useState(true);
     const form = useForm({
-        course_version_id: String(courseVersions[0]?.id ?? ''), document_ids: [] as number[], request_key: crypto.randomUUID(),
+        course_version_id: String(courseVersions[0]?.id ?? ''), document_ids: [] as number[], request_key: newRequestKey(),
         number_of_questions: 5, source_mode: 'extract_exact' as 'generated' | 'extract_exact', source_scope: 'all' as SourceScope, type_counts: { multiple_choice: 5 } as Record<string, number>,
         difficulty_counts: { EASY: 5 } as Record<string, number>, category_counts: { reading: 5 } as Record<string, number>, additional_constraints: '',
     });
