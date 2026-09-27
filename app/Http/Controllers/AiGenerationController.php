@@ -26,8 +26,7 @@ class AiGenerationController extends Controller
 
         return Inertia::render('AI/Index', [
             'jobs' => $scope->jobs($request->user())->latest()->paginate(15),
-            'documents' => $scope->documents($request->user())->latest()->limit(100)->get(['id', 'course_version_id', 'original_name', 'status', 'page_count', 'error_message', 'parser_metadata_json']),
-            'courseVersions' => $scope->versions($request->user())->with('course')->get()->map(fn ($v) => ['id' => $v->id, 'label' => $v->course->title.' · '.$v->code, 'grade_level' => $v->course->grade_level, 'cefr_level' => $v->course->cefr_level]),
+            'documents' => $scope->documents($request->user())->latest()->limit(100)->get(['id', 'original_name', 'status', 'page_count', 'error_message', 'parser_metadata_json']),
             'options' => ['types' => config('english-ai.types'), 'categories' => config('english-ai.categories'), 'difficulties' => config('english-ai.difficulties')],
             'providerReady' => config('services.ai.provider') === 'openai' && filled(config('services.ai.key')),
         ]);
@@ -36,11 +35,8 @@ class AiGenerationController extends Controller
     public function store(GenerateEnglishQuestionsRequest $request, AuthoringScope $scope): RedirectResponse
     {
         $data = $request->validated();
-        $version = $scope->versions($request->user())->with('course')->findOrFail($data['course_version_id']);
-        $documents = $scope->documents($request->user())->where('course_version_id', $version->id)->where('status', 'READY')->whereIn('id', $data['document_ids'])->get();
+        $documents = $scope->documents($request->user())->where('status', 'READY')->whereIn('id', $data['document_ids'])->get();
         abort_unless($documents->count() === count($data['document_ids']), 403);
-        $data['grade_level'] ??= $version->course->grade_level;
-        $data['cefr_level'] ??= $version->course->cefr_level;
         $job = DB::transaction(function () use ($request, $data, $documents) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $existing = AiGenerationJob::where('center_id', $request->user()->center_id)->where('requested_by', $request->user()->id)->where('request_key', $data['request_key'])->first();

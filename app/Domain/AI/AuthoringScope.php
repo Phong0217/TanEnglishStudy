@@ -26,7 +26,7 @@ class AuthoringScope
     {
         $query = SourceDocument::where('center_id', $user->center_id);
         if (! $user->hasRole('ADMIN')) {
-            $query->where('uploaded_by', $user->id)->whereIn('course_version_id', $this->versions($user)->select('id'));
+            $query->where('uploaded_by', $user->id);
         }
 
         return $query;

@@ -96,7 +96,18 @@ class GenerateEnglishBatch
         if (! $sources) {
             throw new RuntimeException('insufficient_context: no usable source sections.');
         }
-        $existing = QuestionVersion::whereHas('question', fn ($q) => $q->where('center_id', $job->center_id)->where('course_version_id', $job->request_json['course_version_id']))->latest('id')->limit(100)->get()->pluck('content_json.prompt')->filter()->values()->all();
+        // AI source documents are center-scoped and no longer tied to a course
+        // version. Keep compatibility with older jobs that still carry one.
+        $courseVersionId = $job->request_json['course_version_id'] ?? null;
+        $questionScope = function () use ($job, $courseVersionId) {
+            return QuestionVersion::whereHas('question', function ($q) use ($job, $courseVersionId) {
+                $q->where('center_id', $job->center_id);
+                if ($courseVersionId !== null) {
+                    $q->where('course_version_id', $courseVersionId);
+                }
+            });
+        };
+        $existing = $questionScope()->latest('id')->limit(100)->get()->pluck('content_json.prompt')->filter()->values()->all();
         $categoryHint = $exactMode ? match ($sourceScope) {
             'vocabulary_grammar' => 'vocabulary',
             'writing' => 'writing',
@@ -140,7 +151,7 @@ class GenerateEnglishBatch
                 }
                 // Compare against the full scoped bank in bounded database chunks.
                 $duplicate = false;
-                QuestionVersion::whereHas('question', fn ($q) => $q->where('center_id', $job->center_id)->where('course_version_id', $job->request_json['course_version_id']))->select('id', 'content_json')->chunkById(200, function ($versions) use (&$duplicate, $validator, $output) {
+                $questionScope()->select('id', 'content_json')->chunkById(200, function ($versions) use (&$duplicate, $validator, $output) {
                     $duplicate = $validator->duplicate($output['content']['prompt'], $versions->pluck('content_json.prompt')->filter()->all());
 
                     return ! $duplicate;
@@ -159,7 +170,7 @@ class GenerateEnglishBatch
             }
         }
 
-        return DB::transaction(function () use ($job, $progress, $batch, $outputs, $invalid, $validationErrors, $result, $validator, $slots, $exactMode, $sourceOffset, $nextSourceOffset) {
+        return DB::transaction(function () use ($job, $progress, $batch, $outputs, $invalid, $validationErrors, $result, $validator, $slots, $exactMode, $sourceOffset, $nextSourceOffset, $courseVersionId) {
             $locked = AiGenerationJob::withoutGlobalScopes()->lockForUpdate()->findOrFail($job->id);
             if ($locked->status === 'CANCELLED') {
                 return true;
@@ -182,7 +193,7 @@ class GenerateEnglishBatch
                     continue;
                 }
                 $output = $outputs[$index];
-                $attributes = ['center_id' => $job->center_id, 'course_version_id' => $job->request_json['course_version_id'], 'type' => $output['type'], 'skill' => $output['skill'], 'difficulty' => $output['difficulty'], 'english_category' => $output['english_category'], 'concept' => $output['concept'], 'status' => 'IN_REVIEW', 'created_by' => $job->requested_by, 'ai_generation_job_id' => $job->id, 'content_hash' => hash('sha256', $validator->normalize($output['content']['prompt']))];
+                $attributes = ['center_id' => $job->center_id, 'course_version_id' => $courseVersionId, 'type' => $output['type'], 'skill' => $output['skill'], 'difficulty' => $output['difficulty'], 'english_category' => $output['english_category'], 'concept' => $output['concept'], 'status' => 'IN_REVIEW', 'created_by' => $job->requested_by, 'ai_generation_job_id' => $job->id, 'content_hash' => hash('sha256', $validator->normalize($output['content']['prompt']))];
                 if ($replace = $job->request_json['replace_question_id'] ?? null) {
                     $question = Question::withoutGlobalScopes()->where('center_id', $job->center_id)->lockForUpdate()->findOrFail($replace);
                     $question->update($attributes);

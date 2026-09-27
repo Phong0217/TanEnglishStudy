@@ -15,7 +15,7 @@ class GenerateEnglishQuestionsRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['course_version_id' => 'required|integer', 'document_ids' => 'required|array|min:1|max:10', 'document_ids.*' => 'required|integer|distinct', 'request_key' => 'required|uuid', 'grade_level' => 'nullable|integer|min:1|max:12', 'cefr_level' => 'nullable|in:A1,A2,B1,B2,C1,C2', 'number_of_questions' => 'required|integer|min:1|max:60', 'type_counts' => 'required_unless:source_mode,extract_exact|array', 'difficulty_counts' => 'required_unless:source_mode,extract_exact|array', 'category_counts' => 'required_unless:source_mode,extract_exact|array', 'additional_constraints' => 'nullable|string|max:2000', 'source_mode' => 'nullable|in:generated,extract_exact', 'source_scope' => 'nullable|in:all,vocabulary_grammar,reading,writing'];
+        return ['document_ids' => 'required|array|min:1|max:10', 'document_ids.*' => 'required|integer|distinct', 'request_key' => 'required|uuid', 'grade_level' => 'nullable|integer|min:1|max:12', 'cefr_level' => 'nullable|in:A1,A2,B1,B2,C1,C2', 'number_of_questions' => 'required|integer|min:1|max:60', 'type_counts' => 'required_unless:source_mode,extract_exact|array', 'difficulty_counts' => 'required_unless:source_mode,extract_exact|array', 'category_counts' => 'required_unless:source_mode,extract_exact|array', 'additional_constraints' => 'nullable|string|max:2000', 'source_mode' => 'nullable|in:generated,extract_exact', 'source_scope' => 'nullable|in:all,vocabulary_grammar,reading,writing'];
     }
 
     protected function prepareForValidation(): void

@@ -37,11 +37,14 @@ class DocumentController extends Controller
     public function uploadMany(Request $request, AuthoringScope $scope, ImportDocument $import): RedirectResponse
     {
         abort_unless($request->user()->can('documents.manage'), 403);
-        $data = $request->validate(['course_version_id' => 'required|integer', 'documents' => 'required|array|min:1|max:10', 'documents.*' => ['required', 'file', 'max:'.config('lms.document_max_kb', 20480), 'mimes:pdf,docx', 'mimetypes:application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document']]);
-        $version = $scope->versions($request->user())->findOrFail($data['course_version_id']);
-        DB::transaction(function () use ($request, $import, $version) {
+        $data = $request->validate(['course_version_id' => 'sometimes|nullable|integer', 'documents' => 'required|array|min:1|max:10', 'documents.*' => ['required', 'file', 'max:'.config('lms.document_max_kb', 20480), 'mimes:pdf,docx', 'mimetypes:application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document']]);
+        $versionId = $data['course_version_id'] ?? null;
+        if ($versionId !== null) {
+            $scope->versions($request->user())->findOrFail($versionId);
+        }
+        DB::transaction(function () use ($request, $import, $versionId) {
             foreach ($request->file('documents') as $file) {
-                $import->store($request->user(), $file, $version->id);
+                $import->store($request->user(), $file, $versionId ? (int) $versionId : null);
             }
         });
 

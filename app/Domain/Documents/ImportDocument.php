@@ -35,7 +35,7 @@ class ImportDocument
         $checksum = hash_file('sha256', $file->getRealPath());
         $existing = SourceDocument::where('center_id', $user->center_id)->where('checksum', $checksum)->first();
         if ($existing) {
-            if ($existing->uploaded_by === $user->id && $existing->course_version_id === $versionId) {
+            if ($existing->uploaded_by === $user->id) {
                 return $existing;
             }
             throw ValidationException::withMessages(['documents' => 'This file is already registered in the center.']);
