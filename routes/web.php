@@ -30,10 +30,12 @@ Route::get('/dashboard', fn () => redirect()->route(strtolower(auth()->user()->g
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/media-assets/{mediaAsset}/stream', [MediaAssetController::class, 'stream'])->name('media-assets.stream');
     Route::get('/center/logo', [CenterSettingsController::class, 'logo'])->name('center.logo');
+    Route::get('/center/background', [CenterSettingsController::class, 'background'])->name('center.background');
     foreach (['admin' => 'ADMIN', 'teacher' => 'TEACHER'] as $prefix => $role) {
         Route::prefix($prefix)->name($prefix.'.')->middleware('primary-role:'.$role)->group(function () {
             Route::post('/ai-documents', [DocumentController::class, 'uploadMany'])->middleware('throttle:10,1')->name('ai.documents');
             Route::get('/ai-jobs/{job}/review', [AiGenerationController::class, 'show'])->name('ai.review');
+            Route::post('/ai-jobs/{job}/import-to-lesson', [AiGenerationController::class, 'importToLesson'])->name('ai.import-to-lesson');
             Route::post('/ai-jobs/{job}/retry', [AiGenerationController::class, 'retry'])->middleware('throttle:5,1')->name('ai.retry');
             Route::post('/ai-questions/bulk', [EnglishQuestionReviewController::class, 'bulk'])->name('ai.questions.bulk');
             Route::patch('/ai-questions/{question}', [EnglishQuestionReviewController::class, 'update'])->name('ai.questions.update');
@@ -86,6 +88,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/grades/{grade}/release', [GradeController::class, 'release'])->name('grades.release');
         Route::get('/questions', [QuestionController::class, 'index'])->name('questions.index');
         Route::post('/questions', [QuestionController::class, 'store'])->name('questions.store');
+        Route::delete('/questions', [QuestionController::class, 'destroyMany'])->name('questions.destroy-many');
+        Route::delete('/questions/{question}', [QuestionController::class, 'destroy'])->name('questions.destroy');
         Route::patch('/questions/{question}/review', [QuestionController::class, 'review'])->name('questions.review');
         Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');
         Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');
@@ -129,6 +133,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/grades/{grade}/release', [GradeController::class, 'release'])->name('grades.release');
         Route::get('/questions', [QuestionController::class, 'index'])->name('questions.index');
         Route::post('/questions', [QuestionController::class, 'store'])->name('questions.store');
+        Route::delete('/questions', [QuestionController::class, 'destroyMany'])->name('questions.destroy-many');
+        Route::delete('/questions/{question}', [QuestionController::class, 'destroy'])->name('questions.destroy');
         Route::patch('/questions/{question}/review', [QuestionController::class, 'review'])->name('questions.review');
         Route::get('/documents', [DocumentController::class, 'index'])->name('documents.index');
         Route::post('/documents', [DocumentController::class, 'store'])->name('documents.store');

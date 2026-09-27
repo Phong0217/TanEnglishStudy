@@ -59,7 +59,7 @@ class DocumentController extends Controller
     public function retry(Request $request, SourceDocument $document, AuthoringScope $scope): RedirectResponse
     {
         $this->access($request, $document, $scope);
-        abort_unless(in_array($document->status, ['FAILED', 'NEEDS_REVIEW']), 409);
+        abort_unless(in_array($document->status, ['FAILED', 'NEEDS_REVIEW'], true) || ($document->status === 'READY' && $document->requiresChunkReparse()), 409);
         $document->update(['status' => 'UPLOADED', 'error_message' => null]);
         ParseSourceDocumentJob::dispatch($document->id)->onConnection(config('english-ai.queue_connection'));
 

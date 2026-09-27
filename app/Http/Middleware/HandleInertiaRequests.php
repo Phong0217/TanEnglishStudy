@@ -41,6 +41,8 @@ class HandleInertiaRequests extends Middleware
                 'name' => $center->name,
                 'code' => $center->code,
                 'logoUrl' => $center->logo_path ? route('center.logo', ['v' => $center->updated_at?->timestamp]) : null,
+                'backgroundUrl' => data_get($center->settings_json, 'background_path') ? route('center.background', ['v' => $center->updated_at?->timestamp]) : null,
+                'backgroundColor' => data_get($center->settings_json, 'background_color'),
             ] : null,
             'appName' => config('app.name'),
             'flash' => [

@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Domain\AI\AuthoringScope;
 use App\Http\Requests\GenerateEnglishQuestionsRequest;
+use App\Http\Requests\AI\ImportAiQuestionsToLessonRequest;
+use App\Domain\Learning\ImportAiQuestionsToLesson;
 use App\Jobs\GenerateQuestionsJob;
+use App\Jobs\ParseSourceDocumentJob;
 use App\Models\AiGenerationJob;
 use App\Models\User;
+use App\Models\Lesson;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +49,11 @@ class AiGenerationController extends Controller
             }
             $job = AiGenerationJob::create(['center_id' => $request->user()->center_id, 'requested_by' => $request->user()->id, 'request_key' => $data['request_key'], 'status' => 'QUEUED', 'request_json' => collect($data)->except(['document_ids', 'request_key'])->all(), 'progress_json' => ['done' => [], 'attempts' => [], 'invalid_count' => 0, 'phase' => 'ANALYZING']]);
             $job->documents()->sync($documents->modelKeys());
+            foreach ($documents->filter(fn ($document) => $document->status === 'READY' && $document->requiresChunkReparse()) as $document) {
+                $document->update(['status' => 'UPLOADED', 'error_message' => null]);
+                ParseSourceDocumentJob::dispatch($document->id)->onConnection(config('english-ai.queue_connection'))->afterCommit();
+            }
+            // Generation waits for reparsing to finish when an older parser was used.
             GenerateQuestionsJob::dispatch($job->id)->afterCommit();
 
             return $job;
@@ -57,8 +66,27 @@ class AiGenerationController extends Controller
     {
         $this->access($request, $job, $scope);
         $job->load(['questions.versions.sources.documentChunk.sourceDocument', 'documents']);
+        $lessons = Lesson::query()
+            ->whereHas('creator', fn ($query) => $query->where('center_id', $request->user()->center_id))
+            ->when(! $request->user()->hasRole('ADMIN'), fn ($query) => $query->where('created_by', $request->user()->id))
+            ->orderByDesc('updated_at')->get(['id', 'title', 'status']);
 
-        return Inertia::render('AI/Review', ['job' => $job, 'options' => ['types' => config('english-ai.types'), 'categories' => config('english-ai.categories'), 'difficulties' => config('english-ai.difficulties')]]);
+        return Inertia::render('AI/Review', ['job' => $job, 'lessons' => $lessons, 'options' => ['types' => config('english-ai.types'), 'categories' => config('english-ai.categories'), 'difficulties' => config('english-ai.difficulties')]]);
+    }
+
+    public function importToLesson(ImportAiQuestionsToLessonRequest $request, AiGenerationJob $job, AuthoringScope $scope, ImportAiQuestionsToLesson $importer, \App\Support\Logging\AppLogger $logger): RedirectResponse
+    {
+        $this->access($request, $job, $scope);
+        $data = $request->validated();
+        abort_unless($job->questions()->whereIn('id', $data['question_ids'])->count() === count($data['question_ids']), 422, 'Chỉ có thể đưa câu hỏi thuộc tác vụ AI này vào Lesson.');
+        $lesson = Lesson::whereKey($data['lesson_id'])->firstOrFail();
+        $this->authorize('update', $lesson);
+        $created = $importer->execute($request->user(), $lesson, $data['question_ids']);
+        $logger->info(\App\Enums\LogService::LESSON_BUILDER, 'AI questions imported into lesson', [
+            'lesson_id' => $lesson->id, 'ai_job_id' => $job->id,
+            'question_ids' => $data['question_ids'], 'created_block_count' => $created->count(),
+        ]);
+        return back()->with('success', $created->isEmpty() ? 'Các câu hỏi đã có trong Lesson.' : "Đã thêm {$created->count()} câu hỏi vào bản nháp Lesson. Hãy kiểm tra, lưu và xuất bản trước khi phân công.");
     }
 
     public function status(Request $request, AiGenerationJob $job, AuthoringScope $scope): JsonResponse
@@ -83,7 +111,17 @@ class AiGenerationController extends Controller
             $current = AiGenerationJob::lockForUpdate()->findOrFail($job->id);
             abort_unless($current->status === 'FAILED', 409);
             $progress = $current->progress_json ?? [];
+            // A retry must not display diagnostics from the previous prompt/
+            // schema version. Keep completed question IDs, but restart the
+            // failed slots and their counters from a clean attempt.
             $progress['attempts'] = [];
+            $progress['invalid_count'] = 0;
+            $progress['validation_errors'] = [];
+            if (($current->request_json['source_mode'] ?? 'generated') === 'extract_exact') {
+                // Re-run exact extraction from the beginning of the document;
+                // older jobs may have a cursor based on the pre-section parser.
+                $progress['source_offset'] = 0;
+            }
             $current->update(['status' => 'QUEUED', 'error_message' => null, 'completed_at' => null, 'progress_json' => $progress]);
             GenerateQuestionsJob::dispatch($job->id)->afterCommit();
         });

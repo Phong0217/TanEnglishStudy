@@ -72,8 +72,9 @@ class AssignLessonAction
                                 'reading_instructions' => $content['instructions'] ?? '',
                                 'reading_group_id' => $activityId,
                             ]);
-                            AssignmentItem::create(['assignment_version_id' => $version->id, 'source_lesson_block_id' => $block->id, 'item_type' => $questionType, 'content_snapshot_json' => $readingContent, 'answer_key_snapshot_json' => $question['answer_key'] ?? [], 'settings_snapshot_json' => $questionSettings, 'points' => $points, 'position' => ++$itemPosition]);
-                            $total += $points;
+                            $questionPoints = max(0.0, (float) ($question['points'] ?? 1));
+                            AssignmentItem::create(['assignment_version_id' => $version->id, 'source_lesson_block_id' => $block->id, 'item_type' => $questionType, 'content_snapshot_json' => $readingContent, 'answer_key_snapshot_json' => $question['answer_key'] ?? [], 'settings_snapshot_json' => $questionSettings, 'points' => $questionPoints, 'position' => ++$itemPosition]);
+                            $total += $questionPoints;
                         }
                     } elseif ($block->block_type->value === 'listening_question' && isset($content['questions']) && is_array($content['questions'])) {
                         $activityId = (string) (($block->settings_json ?? [])['activity_group_id'] ?? $block->id);

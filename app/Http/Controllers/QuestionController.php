@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 class QuestionController extends Controller
 {
@@ -56,4 +57,35 @@ class QuestionController extends Controller
 
         return back()->with('success', 'Question review saved.');
     }
+    public function destroy(Request $request, Question $question, AuditLogger $audit, \App\Support\Logging\AppLogger $logger): RedirectResponse
+    {
+        abort_unless($request->user()->can('questions.manage'), 403);
+        abort_unless(app(AuthoringScope::class)->questions($request->user())->whereKey($question->id)->exists(), 403);
+
+        $question->delete();
+        $audit->record('QUESTION_DELETED', $question, ['status' => $question->status], ['deleted' => true]);
+        $logger->info(\App\Enums\LogService::QUESTION_BANK, 'Question deleted', ['question_id' => $question->id]);
+
+        return back()->with('success', 'Question đã được xóa.');
+    }
+
+    public function destroyMany(Request $request, AuditLogger $audit, \App\Support\Logging\AppLogger $logger): RedirectResponse
+    {
+        abort_unless($request->user()->can('questions.manage'), 403);
+        $data = $request->validate(['question_ids' => ['required', 'array', 'min:1', 'max:100'], 'question_ids.*' => ['integer', 'distinct', 'exists:questions,id']]);
+        $scope = app(AuthoringScope::class)->questions($request->user());
+        $questions = $scope->whereIn('id', $data['question_ids'])->get();
+        abort_unless($questions->count() === count($data['question_ids']), HttpResponse::HTTP_FORBIDDEN, 'One or more questions are outside your authoring scope.');
+
+        DB::transaction(function () use ($questions, $audit) {
+            foreach ($questions as $question) {
+                $question->delete();
+                $audit->record('QUESTION_DELETED', $question, ['status' => $question->status], ['deleted' => true]);
+            }
+        });
+        $logger->info(\App\Enums\LogService::QUESTION_BANK, 'Questions deleted', ['question_ids' => $questions->modelKeys(), 'count' => $questions->count()]);
+
+        return back()->with('success', sprintf('%d câu hỏi đã được xóa.', $questions->count()));
+    }
+
 }

@@ -4,6 +4,12 @@ namespace App\Domain\Documents;
 
 class EnglishDocumentChunks
 {
+    /**
+     * Stored on every parsed document so documents parsed by an older
+     * container can be rebuilt before AI generation uses their chunks.
+     */
+    public const ANALYSIS_METHOD = 'section-headings-v2';
+
     public function build(array $pages): array
     {
         $edges = [];
@@ -20,15 +26,30 @@ class EnglishDocumentChunks
         $lesson = null;
         $heading = null;
         $type = 'general_content';
+        $activityType = 'GENERAL';
+        $groupKey = 'general';
+        $passageKey = null;
+        $passageIndex = 0;
         $pageStart = null;
         $pageEnd = null;
-        $flush = function () use (&$chunks, &$seen, &$buffer, &$unit, &$lesson, &$heading, &$type, &$pageStart, &$pageEnd) {
+        $flush = function () use (&$chunks, &$seen, &$buffer, &$unit, &$lesson, &$heading, &$type, &$activityType, &$groupKey, &$passageKey, &$pageStart, &$pageEnd) {
             $content = trim(implode("\n", $buffer));
             $hash = hash('sha256', $content);
             if ($content !== '' && ! isset($seen[$hash])) {
                 $chunks[] = ['chunk_index' => count($chunks), 'heading' => $heading, 'page_number' => $pageStart,
                     'content' => $content, 'token_count' => (int) ceil(mb_strlen($content) / 4),
-                    'metadata_json' => ['unit' => $unit, 'lesson' => $lesson, 'section_type' => $type, 'page_start' => $pageStart, 'page_end' => $pageEnd, 'analysis_method' => 'section-headings-v1']];
+                    'metadata_json' => [
+                        'unit' => $unit,
+                        'lesson' => $lesson,
+                        'section_type' => $type,
+                        'activity_type' => $activityType,
+                        'group_key' => $groupKey,
+                        'section_title' => $heading,
+                        'passage_key' => $passageKey,
+                        'page_start' => $pageStart,
+                        'page_end' => $pageEnd,
+                        'analysis_method' => self::ANALYSIS_METHOD,
+                    ]];
                 $seen[$hash] = true;
             }
             $buffer = [];
@@ -54,12 +75,29 @@ class EnglishDocumentChunks
                     }
                     $heading = $line;
                     $type = 'general_content';
+                    $activityType = 'GENERAL';
+                    $groupKey = 'general';
+                    $passageKey = null;
+                    $passageIndex = 0;
                 } elseif (mb_strlen($line) < 160 && preg_match('/^(vocabulary|grammar|reading|dialogue|conversation|communication|language focus|review|practice|exercise|example|listening transcript)\b/i', $line, $match)) {
                     $flush();
                     $heading = $line;
                     $type = match (strtolower($match[1])) {
                         'conversation', 'communication' => 'dialogue', 'language focus' => 'language_focus', 'review', 'practice' => 'exercise', 'listening transcript' => 'transcript', default => strtolower($match[1])
                     };
+                    [$activityType, $groupKey] = $this->classifyHeading($line, $type);
+                    $passageKey = null;
+                    $passageIndex = 0;
+                } elseif (mb_strlen($line) < 160 && preg_match('/^(?:[A-Z][.)-]?\s*)?(?:vocabulary\s*(?:&|and)\s*grammar|grammar\s*(?:&|and)\s*vocabulary|language|reading|writing|listening|speaking)\b/i', $line)) {
+                    $flush();
+                    $heading = $line;
+                    [$activityType, $groupKey] = $this->classifyHeading($line, 'general_content');
+                    $type = strtolower($activityType);
+                    $passageKey = null;
+                    $passageIndex = 0;
+                } elseif ($activityType === 'READING' && preg_match('/^(?:read|reading|passage|text)\b/i', $line)) {
+                    $passageIndex++;
+                    $passageKey = $groupKey.':p'.$passageIndex;
                 }
                 // Prefer section and paragraph boundaries; bound very long paragraphs without losing text.
                 foreach (mb_str_split($line, 3000) as $part) {
@@ -75,5 +113,23 @@ class EnglishDocumentChunks
         $flush();
 
         return $chunks;
+    }
+
+    /** @return array{0:string,1:string} */
+    private function classifyHeading(string $heading, string $fallback): array
+    {
+        $value = mb_strtolower(trim($heading));
+        $value = preg_replace('/^[a-z]\s*[.)-]\s*/u', '', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        if (str_contains($value, 'vocabulary') && str_contains($value, 'grammar')) {
+            return ['VOCABULARY_GRAMMAR', 'vocabulary_grammar'];
+        }
+        foreach (['reading' => 'READING', 'writing' => 'WRITING', 'listening' => 'LISTENING', 'speaking' => 'SPEAKING', 'grammar' => 'GRAMMAR', 'vocabulary' => 'VOCABULARY'] as $needle => $activity) {
+            if (str_contains($value, $needle)) {
+                return [$activity, $activity === 'READING' ? 'reading' : strtolower($activity)];
+            }
+        }
+
+        return ['GENERAL', $fallback === 'general_content' ? 'general' : strtolower($fallback)];
     }
 }

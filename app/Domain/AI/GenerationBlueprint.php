@@ -21,6 +21,15 @@ class GenerationBlueprint
 
     public function slots(array $data): array
     {
+        if (($data['source_mode'] ?? 'generated') === 'extract_exact') {
+            $category = match ($data['source_scope'] ?? 'all') {
+                'vocabulary_grammar' => 'vocabulary',
+                'writing' => 'writing',
+                default => 'reading',
+            };
+
+            return array_map(fn ($i) => ['slot' => $i, 'type' => 'multiple_choice', 'difficulty' => 'MEDIUM', 'category' => $category], range(0, (int) $data['number_of_questions'] - 1));
+        }
         $this->validate($data);
         $expand = fn ($counts) => array_merge(...array_map(fn ($key, $count) => array_fill(0, $count, $key), array_keys($counts), array_values($counts)));
         $types = $expand($data['type_counts']);

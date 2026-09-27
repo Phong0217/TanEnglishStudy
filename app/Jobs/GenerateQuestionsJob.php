@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Domain\AI\AiQuestionGeneratorInterface;
 use App\Domain\AI\GenerateEnglishBatch;
 use App\Models\AiGenerationJob;
+use App\Models\SourceDocument;
+use App\Jobs\ParseSourceDocumentJob;
 use App\Notifications\SystemNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -43,6 +45,23 @@ class GenerateQuestionsJob implements ShouldQueue
         if (in_array($job->status, ['CANCELLED', 'COMPLETED', 'FAILED'])) {
             return;
         }
+        $sourceIds = $job->documents()->pluck('source_documents.id');
+        $documents = SourceDocument::withoutGlobalScopes()->whereIn('id', $sourceIds)->get();
+        if ($documents->contains(fn ($document) => in_array($document->status, ['FAILED', 'NEEDS_REVIEW'], true))) {
+            throw new \RuntimeException('A selected source document could not be parsed. Reprocess the document and retry the AI job.');
+        }
+        $stale = $documents->filter(fn ($document) => $document->status === 'READY' && $document->requiresChunkReparse());
+        foreach ($stale as $document) {
+            $document->update(['status' => 'UPLOADED', 'error_message' => null]);
+            ParseSourceDocumentJob::dispatch($document->id)->onConnection(config('english-ai.queue_connection'));
+        }
+        if ($stale->isNotEmpty() || $documents->contains(fn ($document) => $document->status !== 'READY')) {
+            // Parsing can take longer than one queue attempt. Schedule a fresh
+            // generation tick instead of failing the job while chunks rebuild.
+            $job->update(['status' => 'QUEUED']);
+            self::dispatch($job->id)->delay(now()->addSeconds(5));
+            return;
+        }
         $job->update(['status' => 'PROCESSING', 'started_at' => $job->started_at ?? now(), 'provider' => config('services.ai.provider'), 'model' => config('services.ai.model'), 'prompt_version' => config('english-ai.prompt_version')]);
         $terminal = $batch->execute($job, app(AiQuestionGeneratorInterface::class));
         if (! $terminal) {
@@ -59,6 +78,18 @@ class GenerateQuestionsJob implements ShouldQueue
 
     public function failed(?Throwable $error): void
     {
-        AiGenerationJob::withoutGlobalScopes()->whereKey($this->jobId)->whereNotIn('status', ['COMPLETED', 'CANCELLED'])->update(['status' => 'FAILED', 'error_message' => 'AI service could not complete this batch. Check provider configuration and retry remaining questions.', 'completed_at' => now()]);
+        $message = $error?->getMessage() ?: 'Unknown queue error.';
+        if ($error instanceof \Illuminate\Validation\ValidationException) {
+            $message = collect($error->errors())->flatten()->first() ?: $message;
+        }
+        // Keep provider diagnostics useful without persisting API credentials or
+        // a full remote response in the user-facing job record.
+        $message = preg_replace('/(?:sk|sess|key)-[A-Za-z0-9_\-]+/i', '[REDACTED]', $message) ?: $message;
+        $message = mb_substr(trim($message), 0, 500);
+        AiGenerationJob::withoutGlobalScopes()->whereKey($this->jobId)->whereNotIn('status', ['COMPLETED', 'CANCELLED'])->update([
+            'status' => 'FAILED',
+            'error_message' => 'AI batch failed: '.$message,
+            'completed_at' => now(),
+        ]);
     }
 }

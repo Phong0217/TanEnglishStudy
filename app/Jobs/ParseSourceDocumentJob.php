@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Domain\Documents\DocumentParser;
 use App\Domain\Documents\EnglishDocumentChunks;
 use App\Models\SourceDocument;
+use App\Models\QuestionSource;
 use App\Notifications\SystemNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,7 +27,7 @@ class ParseSourceDocumentJob implements ShouldQueue
     public function handle(DocumentParser $parser): void
     {
         $document = SourceDocument::withoutGlobalScopes()->with('chunks')->findOrFail($this->documentId);
-        if ($document->status === 'READY') {
+        if ($document->status === 'READY' && ! $document->requiresChunkReparse()) {
             return;
         }
         $document->update(['status' => 'PROCESSING', 'error_message' => null]);
@@ -48,12 +49,45 @@ class ParseSourceDocumentJob implements ShouldQueue
             $textLength = $pages->sum(fn ($page) => mb_strlen(trim($page['text'])));
             $status = $textLength < 20 ? 'NEEDS_REVIEW' : 'READY';
             DB::transaction(function () use ($document, $result, $pages, $status) {
-                $document->chunks()->delete();
                 $chunks = app(EnglishDocumentChunks::class)->build($pages->all());
+                $existing = $document->chunks()->get()->keyBy('chunk_index');
+                $seenIndexes = [];
                 foreach ($chunks as $chunk) {
-                    $document->chunks()->create($chunk);
+                    $index = (int) $chunk['chunk_index'];
+                    $seenIndexes[$index] = true;
+                    $model = $existing->get($index);
+                    if ($model) {
+                        // Preserve chunk IDs so existing QuestionSource rows remain valid.
+                        $model->update($chunk);
+                    } else {
+                        $document->chunks()->create($chunk);
+                    }
                 }
-                $document->update(['status' => $status, 'page_count' => $pages->count(), 'parser_name' => $result['parser'], 'parse_confidence' => null, 'parser_metadata_json' => ['chunks' => count($chunks), 'sections' => array_values(array_unique(array_column(array_column($chunks, 'metadata_json'), 'section_type')))]]);
+                foreach ($existing as $index => $model) {
+                    if (isset($seenIndexes[(int) $index])) {
+                        continue;
+                    }
+                    if (QuestionSource::where('document_chunk_id', $model->id)->exists()) {
+                        $metadata = (array) ($model->metadata_json ?? []);
+                        $metadata['superseded'] = true;
+                        $model->update(['metadata_json' => $metadata]);
+                    } else {
+                        $model->delete();
+                    }
+                }
+                $metadata = array_map(fn ($chunk) => $chunk['metadata_json'] ?? [], $chunks);
+                $document->update([
+                    'status' => $status,
+                    'page_count' => $pages->count(),
+                    'parser_name' => $result['parser'],
+                    'parse_confidence' => null,
+                    'parser_metadata_json' => [
+                        'chunks' => count($chunks),
+                        'sections' => array_values(array_unique(array_filter(array_map(fn ($item) => $item['section_type'] ?? null, $metadata)))),
+                        'activity_types' => array_values(array_unique(array_filter(array_map(fn ($item) => $item['activity_type'] ?? null, $metadata)))),
+                        'analysis_method' => EnglishDocumentChunks::ANALYSIS_METHOD,
+                    ],
+                ]);
             });
             $document->load('uploader');
             $document->uploader->notify(new SystemNotification('Document processed', $document->original_name.' is '.$status.'.', '/admin/documents'));

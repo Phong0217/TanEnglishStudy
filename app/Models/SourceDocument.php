@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Documents\EnglishDocumentChunks;
 use App\Models\Concerns\BelongsToCenter;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,15 @@ class SourceDocument extends Model
     public function chunks(): HasMany
     {
         return $this->hasMany(DocumentChunk::class)->orderBy('chunk_index');
+    }
+
+    /**
+     * Older containers wrote section-headings-v1 chunks without activity
+     * metadata. Those chunks must be rebuilt before exact extraction.
+     */
+    public function requiresChunkReparse(): bool
+    {
+        return ($this->parser_metadata_json['analysis_method'] ?? null) !== EnglishDocumentChunks::ANALYSIS_METHOD;
     }
 
     public function aiJobs(): BelongsToMany

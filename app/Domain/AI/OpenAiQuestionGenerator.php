@@ -17,7 +17,7 @@ class OpenAiQuestionGenerator implements AiQuestionGeneratorInterface
                 'model' => config('services.ai.model'), 'store' => false,
                 'input' => [['role' => 'system', 'content' => QuestionGenerationSchema::prompt()],
                     ['role' => 'user', 'content' => json_encode(['request' => $request, 'sources' => $sources], JSON_THROW_ON_ERROR)]],
-                'text' => ['format' => ['type' => 'json_schema', 'name' => 'english_questions', 'strict' => true, 'schema' => QuestionGenerationSchema::definition()]],
+                'text' => ['format' => ['type' => 'json_schema', 'name' => 'english_questions', 'strict' => true, 'schema' => QuestionGenerationSchema::definition($request)]],
             ]);
         if (! $response->successful()) {
             throw new RuntimeException('AI service failed (HTTP '.$response->status().'). Retry the remaining batch.');
