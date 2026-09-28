@@ -27,10 +27,13 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', fn () => auth()->check() ? redirect()->route(strtolower(auth()->user()->getRoleNames()->first()).'.dashboard') : redirect()->route('login'));
 Route::get('/dashboard', fn () => redirect()->route(strtolower(auth()->user()->getRoleNames()->first()).'.dashboard'))->middleware(['auth', 'active'])->name('dashboard');
 
+// Center branding is intentionally public so the login page can render the
+// configured logo/background before a user has authenticated.
+Route::get('/center/logo', [CenterSettingsController::class, 'logo'])->name('center.logo');
+Route::get('/center/background', [CenterSettingsController::class, 'background'])->name('center.background');
+
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/media-assets/{mediaAsset}/stream', [MediaAssetController::class, 'stream'])->name('media-assets.stream');
-    Route::get('/center/logo', [CenterSettingsController::class, 'logo'])->name('center.logo');
-    Route::get('/center/background', [CenterSettingsController::class, 'background'])->name('center.background');
     foreach (['admin' => 'ADMIN', 'teacher' => 'TEACHER'] as $prefix => $role) {
         Route::prefix($prefix)->name($prefix.'.')->middleware('primary-role:'.$role)->group(function () {
             Route::post('/ai-documents', [DocumentController::class, 'uploadMany'])->middleware('throttle:10,1')->name('ai.documents');

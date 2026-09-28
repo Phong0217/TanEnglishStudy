@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\LogService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateCenterSettingsRequest;
+use App\Models\Center;
 use App\Support\Logging\AppLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -90,7 +91,7 @@ class CenterSettingsController extends Controller
 
     public function background(Request $request)
     {
-        $center = $request->user()?->center;
+        $center = $this->brandingCenter($request);
         $path = data_get($center?->settings_json, 'background_path');
         abort_unless($path, 404);
 
@@ -106,7 +107,7 @@ class CenterSettingsController extends Controller
 
     public function logo(Request $request)
     {
-        $center = $request->user()?->center;
+        $center = $this->brandingCenter($request);
         abort_unless($center?->logo_path, 404);
 
         $disk = config('filesystems.private_disk', 'private');
@@ -117,5 +118,15 @@ class CenterSettingsController extends Controller
             'Content-Type' => $mime,
             'Cache-Control' => 'private, no-cache, must-revalidate',
         ]);
+    }
+
+    /**
+     * Resolve the center whose branding is public on the login screen.
+     * Authenticated users remain scoped to their own center.
+     */
+    private function brandingCenter(Request $request): ?Center
+    {
+        return $request->user()?->center
+            ?? Center::query()->where('status', 'ACTIVE')->orderBy('id')->first();
     }
 }

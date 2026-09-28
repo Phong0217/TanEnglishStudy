@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Center;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -29,6 +30,12 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        // Branding is also needed on the public login screen. Authenticated
+        // users keep their own center while guests use the active primary
+        // center configured for this installation.
+        $center = $request->user()?->center
+            ?? Center::query()->where('status', 'ACTIVE')->orderBy('id')->first();
+
         return [
             ...parent::share($request),
             'auth' => [
@@ -36,7 +43,7 @@ class HandleInertiaRequests extends Middleware
                 'role' => fn () => $request->user()?->getRoleNames()->first(),
                 'permissions' => fn () => $request->user()?->getAllPermissions()->pluck('name')->values() ?? [],
             ],
-            'center' => fn () => ($center = $request->user()?->center) ? [
+            'center' => fn () => $center ? [
                 'id' => $center->id,
                 'name' => $center->name,
                 'code' => $center->code,
