@@ -98,7 +98,8 @@ class GenerateEnglishBatch
         }
         // AI source documents are center-scoped and no longer tied to a course
         // version. Keep compatibility with older jobs that still carry one.
-        $courseVersionId = $job->request_json['course_version_id'] ?? null;
+        $requestJson = (array) ($job->request_json ?? []);
+        $courseVersionId = $requestJson['course_version_id'] ?? null;
         $questionScope = function () use ($job, $courseVersionId) {
             return QuestionVersion::whereHas('question', function ($q) use ($job, $courseVersionId) {
                 $q->where('center_id', $job->center_id);
@@ -128,11 +129,18 @@ class GenerateEnglishBatch
         if (! is_array($result['questions'] ?? null) || count($result['questions']) > count($batch)) {
             throw new RuntimeException('AI returned an invalid batch size.');
         }
+        $providerQuestionCount = count($result['questions']);
+        $providerInsufficient = ($result['insufficient_context'] ?? false) === true;
+        // In exact extraction mode a source group may contain fewer questions
+        // than the requested batch size. Move on when the provider reports
+        // insufficient context or returns a short batch; otherwise the cursor
+        // stays on the same exhausted group until the job fails.
+        $sectionExhausted = $exactMode && ($providerInsufficient || $providerQuestionCount < count($batch));
         $validator = app(EnglishQuestionValidator::class);
         $outputs = [];
         $invalid = 0;
         $validationErrors = [];
-        if (($result['insufficient_context'] ?? false) === true) {
+        if ($providerInsufficient) {
             $validationErrors[] = 'AI provider reported insufficient context for the selected source section.';
         } elseif (empty($result['questions'])) {
             $validationErrors[] = 'AI provider returned no questions for the selected source section.';
@@ -170,17 +178,18 @@ class GenerateEnglishBatch
             }
         }
 
-        return DB::transaction(function () use ($job, $progress, $batch, $outputs, $invalid, $validationErrors, $result, $validator, $slots, $exactMode, $sourceOffset, $nextSourceOffset, $courseVersionId) {
+        return DB::transaction(function () use ($job, $progress, $batch, $outputs, $invalid, $validationErrors, $result, $validator, $slots, $exactMode, $sourceOffset, $nextSourceOffset, $courseVersionId, $sectionExhausted, $providerInsufficient) {
             $locked = AiGenerationJob::withoutGlobalScopes()->lockForUpdate()->findOrFail($job->id);
             if ($locked->status === 'CANCELLED') {
                 return true;
             }
             $progress['phase'] = 'VALIDATING';
             if ($exactMode) {
-                // Do not skip a section when every output in this batch was
-                // rejected. The previous behavior advanced to Reading after
-                // a failed Vocabulary/Grammar batch, producing Reading-only jobs.
-                $progress['source_offset'] = count($outputs) >= count($batch) ? $nextSourceOffset : $sourceOffset;
+                // Advance after a complete batch, or after a short/explicitly
+                // insufficient response. This lets remaining slots continue
+                // with the next source group instead of retrying an exhausted one.
+                $advanceSource = count($outputs) >= count($batch) || ($sectionExhausted && ($providerInsufficient || count($outputs) > 0));
+                $progress['source_offset'] = $advanceSource ? $nextSourceOffset : $sourceOffset;
             }
             $progress['invalid_count'] = ($progress['invalid_count'] ?? 0) + $invalid;
             if ($validationErrors) {

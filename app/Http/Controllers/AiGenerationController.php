@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\AI\AuthoringScope;
+use App\Domain\AI\GenerationCacheKey;
 use App\Http\Requests\GenerateEnglishQuestionsRequest;
 use App\Http\Requests\AI\ImportAiQuestionsToLessonRequest;
 use App\Domain\Learning\ImportAiQuestionsToLesson;
@@ -37,13 +38,58 @@ class AiGenerationController extends Controller
         $data = $request->validated();
         $documents = $scope->documents($request->user())->whereIn('id', $data['document_ids'])->whereNotIn('status', ['FAILED', 'NEEDS_REVIEW'])->get();
         abort_unless($documents->count() === count($data['document_ids']), 403);
-        $job = DB::transaction(function () use ($request, $data, $documents) {
+        $cacheKey = app(GenerationCacheKey::class)->make($request->user(), $documents, $data);
+        // Keep the payload backward-compatible with older queue workers and
+        // jobs created before course linkage was removed from AI generation.
+        $requestPayload = collect($data)->except(['document_ids', 'request_key'])->all();
+        $requestPayload['course_version_id'] = $data['course_version_id'] ?? null;
+        $job = DB::transaction(function () use ($request, $data, $documents, $cacheKey, $requestPayload) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
-            $existing = AiGenerationJob::where('center_id', $request->user()->center_id)->where('requested_by', $request->user()->id)->where('request_key', $data['request_key'])->first();
+
+            $existing = AiGenerationJob::where('center_id', $request->user()->center_id)
+                ->where('requested_by', $request->user()->id)
+                ->where('request_key', $data['request_key'])
+                ->first();
             if ($existing) {
                 return $existing;
             }
-            $job = AiGenerationJob::create(['center_id' => $request->user()->center_id, 'requested_by' => $request->user()->id, 'request_key' => $data['request_key'], 'status' => 'QUEUED', 'request_json' => collect($data)->except(['document_ids', 'request_key'])->all(), 'progress_json' => ['done' => [], 'attempts' => [], 'invalid_count' => 0, 'phase' => 'ANALYZING']]);
+
+            // A new UUID does not mean a new semantic request. Reuse an
+            // active/completed job with the same deterministic source/blueprint
+            // fingerprint instead of paying for the same provider call again.
+            $cached = AiGenerationJob::where('center_id', $request->user()->center_id)
+                ->where('requested_by', $request->user()->id)
+                ->where('cache_key', $cacheKey)
+                ->latest('id')
+                ->first();
+            if ($cached && in_array($cached->status, ['QUEUED', 'PROCESSING', 'COMPLETED'], true)) {
+                return $cached;
+            }
+            if ($cached && $cached->status === 'FAILED') {
+                // Preserve completed slots from a partial failed job. The next
+                // queue tick will process only pending slots, so a retry never
+                // pays for successful batches again.
+                $progress = $cached->progress_json ?? [];
+                $progress['attempts'] = [];
+                $progress['invalid_count'] = 0;
+                $progress['validation_errors'] = [];
+                if (($data['source_mode'] ?? 'generated') === 'extract_exact' && ! array_key_exists('source_offset', $progress)) {
+                    $progress['source_offset'] = 0;
+                }
+                $cached->update([
+                    'request_key' => $data['request_key'],
+                    'request_json' => $requestPayload,
+                    'status' => 'QUEUED',
+                    'error_message' => null,
+                    'completed_at' => null,
+                    'progress_json' => $progress,
+                ]);
+                GenerateQuestionsJob::dispatch($cached->id)->afterCommit();
+
+                return $cached;
+            }
+
+            $job = AiGenerationJob::create(['center_id' => $request->user()->center_id, 'requested_by' => $request->user()->id, 'request_key' => $data['request_key'], 'cache_key' => $cacheKey, 'status' => 'QUEUED', 'request_json' => $requestPayload, 'progress_json' => ['done' => [], 'attempts' => [], 'invalid_count' => 0, 'phase' => 'ANALYZING']]);
             $job->documents()->sync($documents->modelKeys());
             foreach ($documents->filter(fn ($document) => $document->status === 'READY' && $document->requiresChunkReparse()) as $document) {
                 $document->update(['status' => 'UPLOADED', 'error_message' => null]);
@@ -113,9 +159,10 @@ class AiGenerationController extends Controller
             $progress['attempts'] = [];
             $progress['invalid_count'] = 0;
             $progress['validation_errors'] = [];
-            if (($current->request_json['source_mode'] ?? 'generated') === 'extract_exact') {
-                // Re-run exact extraction from the beginning of the document;
-                // older jobs may have a cursor based on the pre-section parser.
+            if (($current->request_json['source_mode'] ?? 'generated') === 'extract_exact' && ! array_key_exists('source_offset', $progress)) {
+                // Preserve the section cursor for partial jobs. Restarting at
+                // zero makes already-created drafts look like new questions,
+                // so duplicate filtering can exhaust the remaining slot.
                 $progress['source_offset'] = 0;
             }
             $current->update(['status' => 'QUEUED', 'error_message' => null, 'completed_at' => null, 'progress_json' => $progress]);
