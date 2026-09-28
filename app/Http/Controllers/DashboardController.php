@@ -62,8 +62,10 @@ class DashboardController extends Controller
                     $status = $submission->status;
                     return $status instanceof \BackedEnum ? $status->value : (string) $status;
                 });
-                return ! $statuses->intersect(['SUBMITTED', 'LATE', 'GRADED'])->isNotEmpty()
-                    || $statuses->intersect(['IN_PROGRESS', 'RETURNED'])->isNotEmpty();
+                $completed = $statuses->contains(fn (string $status): bool => in_array($status, ['SUBMITTED', 'LATE', 'GRADED'], true));
+                $active = $statuses->contains(fn (string $status): bool => in_array($status, ['IN_PROGRESS', 'RETURNED'], true));
+
+                return ! $completed || $active;
             })
             ->unique(function (AssignmentDelivery $delivery): string {
                 $assignment = $delivery->assignmentVersion?->assignment;
