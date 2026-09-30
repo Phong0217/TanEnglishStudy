@@ -17,6 +17,8 @@ use App\Http\Controllers\MediaAssetController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionController;
+use App\Http\Controllers\ZaloChatbotController;
+use App\Http\Controllers\ZaloWebhookController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\Student\StudentContentController;
 use App\Http\Controllers\Student\SubmissionController;
@@ -31,6 +33,7 @@ Route::get('/dashboard', fn () => redirect()->route(strtolower(auth()->user()->g
 // configured logo/background before a user has authenticated.
 Route::get('/center/logo', [CenterSettingsController::class, 'logo'])->name('center.logo');
 Route::get('/center/background', [CenterSettingsController::class, 'background'])->name('center.background');
+Route::post('/integrations/zalo/webhook', ZaloWebhookController::class)->name('integrations.zalo.webhook');
 
 Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/media-assets/{mediaAsset}/stream', [MediaAssetController::class, 'stream'])->name('media-assets.stream');
@@ -102,6 +105,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/ai-generator', [AiGenerationController::class, 'store'])->middleware('throttle:5,1')->name('ai.store');
         Route::get('/ai-jobs/{job}', [AiGenerationController::class, 'status'])->name('ai.status');
         Route::post('/ai-jobs/{job}/cancel', [AiGenerationController::class, 'cancel'])->name('ai.cancel');
+        Route::get('/zalo-chatbot', [ZaloChatbotController::class, 'index'])->name('zalo.index');
+        Route::post('/zalo-chatbot/groups', [ZaloChatbotController::class, 'store'])->name('zalo.groups.store');
+        Route::patch('/zalo-chatbot/groups/{connection}', [ZaloChatbotController::class, 'update'])->name('zalo.groups.update');
+        Route::delete('/zalo-chatbot/groups/{connection}', [ZaloChatbotController::class, 'destroy'])->name('zalo.groups.destroy');
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('/audit-logs', AuditLogController::class)->name('audit.index');
     });
@@ -145,6 +152,10 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/ai-generator', [AiGenerationController::class, 'index'])->name('ai.index');
         Route::post('/ai-generator', [AiGenerationController::class, 'store'])->middleware('throttle:5,1')->name('ai.store');
         Route::get('/ai-jobs/{job}', [AiGenerationController::class, 'status'])->name('ai.status');
+        Route::get('/zalo-chatbot', [ZaloChatbotController::class, 'index'])->name('zalo.index');
+        Route::post('/zalo-chatbot/groups', [ZaloChatbotController::class, 'store'])->name('zalo.groups.store');
+        Route::patch('/zalo-chatbot/groups/{connection}', [ZaloChatbotController::class, 'update'])->name('zalo.groups.update');
+        Route::delete('/zalo-chatbot/groups/{connection}', [ZaloChatbotController::class, 'destroy'])->name('zalo.groups.destroy');
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::post('/ai-jobs/{job}/cancel', [AiGenerationController::class, 'cancel'])->name('ai.cancel');
         Route::post('/documents/{document}/retry', [DocumentController::class, 'retry'])->name('documents.retry');

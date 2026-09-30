@@ -9,6 +9,11 @@ return [
         'retries' => env('AI_MAX_RETRIES', 2),
     ],
 
+    'zalo' => [
+        'webhook_secret' => env('ZALO_WEBHOOK_SECRET'),
+        'oa_access_token' => env('ZALO_OA_ACCESS_TOKEN'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
