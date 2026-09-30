@@ -22,3 +22,11 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Local environment backups and deployment scratch files
+.env.*
+!.env.example
+*.bak
+*.backup
+check_*.sh
+fix_*.sh
