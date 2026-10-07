@@ -224,6 +224,9 @@ body:has(input[aria-label="Tiêu đề bài học"]):has(button[aria-label="Bậ
 .exam-answer-row.is-selected { border-color: #2563eb; background: #eff6ff; color: #1e3a8a; box-shadow: 0 5px 14px rgb(37 99 235 / .1); }
 .exam-answer-row input { width: 1.15rem; height: 1.15rem; }
 .exam-answer-letter { display: grid; width: 1.7rem; height: 1.7rem; flex: 0 0 auto; place-items: center; border-radius: .5rem; background: #e0ecff; color: #1d4ed8; font-size: .78rem; font-weight: 700; }
+.exam-answer-image-frame { display: flex; width: clamp(5.5rem, 18vw, 11rem); height: clamp(5rem, 15vw, 8rem); flex: 0 0 auto; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #dbeafe; border-radius: .85rem; background: linear-gradient(145deg, #f8fbff, #eef4ff); padding: .35rem; }
+.exam-answer-image-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.exam-answer-image-frame--example { width: 4.5rem; height: 3.5rem; border-radius: .6rem; }
 .exam-answer-check { margin-left: auto; color: #2563eb; animation: answer-check .2s ease-out; }
 .exam-binary { display: inline-flex; min-height: 52px; align-items: center; justify-content: center; gap: .5rem; border: 1px solid #dbe3ee; border-radius: .8rem; background: white; color: #334155; font-weight: 600; transition: border-color .16s, background-color .16s, transform .16s; }
 .exam-binary:hover { transform: translateY(-1px); border-color: #93c5fd; }

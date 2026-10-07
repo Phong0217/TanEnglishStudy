@@ -13,6 +13,6 @@ class MediaAudioRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['file' => ['required', 'file', 'mimes:mp3,wav,m4a,mp4,aac', 'max:51200']];
+        return ['file' => ['required', 'file', 'mimes:mp3,wav,m4a,mp4,aac', 'max:15360']];
     }
 }

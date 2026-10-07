@@ -1,7 +1,7 @@
 FROM php:8.2-cli-bookworm AS php-base
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libcurl4-openssl-dev libfreetype6-dev libicu-dev libjpeg62-turbo-dev libonig-dev libpng-dev libxml2-dev libzip-dev unzip \
+RUN apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update \
+    && apt-get -o Acquire::ForceIPv4=true install -y --no-install-recommends libcurl4-openssl-dev libfreetype6-dev libicu-dev libjpeg62-turbo-dev libonig-dev libpng-dev libxml2-dev libzip-dev unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install bcmath curl dom gd intl mbstring opcache pcntl pdo_mysql xml zip \
     && pecl install redis \
@@ -31,6 +31,7 @@ RUN npm run build
 FROM php-base AS runtime
 
 WORKDIR /var/www/html
+COPY docker/php.ini /usr/local/etc/php/conf.d/99-lms-uploads.ini
 COPY --from=composer-build /app /var/www/html
 COPY --from=frontend-build /app/public/build /var/www/html/public/build
 COPY docker/entrypoint.sh /usr/local/bin/lms-entrypoint
