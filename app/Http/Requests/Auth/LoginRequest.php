@@ -29,7 +29,7 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'username' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
         ];
     }
@@ -44,14 +44,17 @@ class LoginRequest extends FormRequest
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt([
-            'email' => $this->string('email')->toString(),
+            // The existing users.email column is the unique login identifier
+            // for legacy accounts/imports. It may contain a username such as
+            // "student2.3" and therefore must not be validated as an email.
+            'email' => $this->string('username')->trim()->toString(),
             'password' => $this->string('password')->toString(),
             'status' => UserStatus::ACTIVE->value,
         ], $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'username' => trans('auth.failed'),
             ]);
         }
 
@@ -74,7 +77,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
+            'username' => trans('auth.throttle', [
                 'seconds' => $seconds,
                 'minutes' => ceil($seconds / 60),
             ]),
@@ -86,6 +89,6 @@ class LoginRequest extends FormRequest
      */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        return Str::transliterate(Str::lower($this->string('username')->trim()).'|'.$this->ip());
     }
 }
