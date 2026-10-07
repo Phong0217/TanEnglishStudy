@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Classrooms\StudentClassImportService;
 use App\Http\Requests\ImportStudentsRequest;
+use App\Support\Utf8;
 use Illuminate\Http\RedirectResponse;
 use Throwable;
 
@@ -25,7 +26,7 @@ class StudentImportController extends Controller
             return back()->with('success', "Đã import {$result['created']} học sinh mới, cập nhật {$result['updated']} tài khoản và ghi danh {$result['enrolled']} học sinh.");
         } catch (Throwable $exception) {
             report($exception);
-            return back()->withErrors(['file' => $exception->getMessage()]);
+            return back()->withErrors(['file' => Utf8::clean($exception->getMessage())]);
         }
     }
 }

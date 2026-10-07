@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Center;
+use App\Support\Utf8;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -21,6 +22,19 @@ class HandleInertiaRequests extends Middleware
     public function version(Request $request): ?string
     {
         return parent::version($request);
+    }
+
+    /**
+     * Validation errors can contain a message produced by a database driver.
+     * Normalize it before Inertia serializes the page as JSON. This also
+     * protects the next redirect when an older failed import left an invalid
+     * message in the session.
+     */
+    public function resolveValidationErrors(Request $request)
+    {
+        $errors = parent::resolveValidationErrors($request);
+
+        return $this->normalizeValue($errors);
     }
 
     /**
@@ -53,8 +67,8 @@ class HandleInertiaRequests extends Middleware
             ] : null,
             'appName' => config('app.name'),
             'flash' => [
-                'success' => fn () => $request->session()->get('success'),
-                'error' => fn () => $request->session()->get('error'),
+                'success' => fn () => Utf8::clean($request->session()->get('success')),
+                'error' => fn () => Utf8::clean($request->session()->get('error')),
             ],
             'notifications' => fn () => $request->user() ? [
                 'unreadCount' => $request->user()->unreadNotifications()->count(),
@@ -66,5 +80,23 @@ class HandleInertiaRequests extends Middleware
                 ]),
             ] : ['unreadCount' => 0, 'items' => []],
         ];
+    }
+
+    private function normalizeValue(mixed $value): mixed
+    {
+        if (is_object($value)) {
+            $normalized = new \stdClass();
+            foreach (get_object_vars($value) as $key => $item) {
+                $normalized->{$key} = $this->normalizeValue($item);
+            }
+
+            return $normalized;
+        }
+
+        if (is_array($value)) {
+            return array_map(fn ($item) => $this->normalizeValue($item), $value);
+        }
+
+        return is_string($value) ? Utf8::clean($value) : $value;
     }
 }
