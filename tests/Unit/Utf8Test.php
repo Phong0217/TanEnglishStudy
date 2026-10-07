@@ -36,6 +36,14 @@ class Utf8Test extends TestCase
         $this->assertFalse(Utf8::containsReplacementMarker('Bảo Ngọc'));
     }
 
+    public function test_correct_vietnamese_name_is_not_rejected(): void
+    {
+        $name = Utf8::clean('Bảo Ngọc');
+
+        $this->assertSame('Bảo Ngọc', $name);
+        $this->assertFalse(Utf8::containsReplacementMarker($name));
+    }
+
     public function test_csv_rows_are_normalized_before_import(): void
     {
         $file = UploadedFile::fake()->createWithContent(
@@ -49,5 +57,15 @@ class Utf8Test extends TestCase
 
         $this->assertSame('ánh Linh', $rows[1][1]);
         $this->assertTrue(mb_check_encoding($rows[1][1], 'UTF-8'));
+    }
+
+    public function test_excel_float_artifact_is_normalized_for_class_lookup(): void
+    {
+        $method = new ReflectionMethod(StudentClassImportService::class, 'normalizeClassValue');
+        $method->setAccessible(true);
+
+        $this->assertSame('2.3', $method->invoke(new StudentClassImportService(), '2.2999999999999998'));
+        $this->assertSame('2.3', $method->invoke(new StudentClassImportService(), '2.3'));
+        $this->assertSame('2A', $method->invoke(new StudentClassImportService(), '2A'));
     }
 }

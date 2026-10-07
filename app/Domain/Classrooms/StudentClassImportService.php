@@ -31,13 +31,20 @@ class StudentClassImportService
         DB::transaction(function () use ($actor, $rows, $headers, $classKey, $nameKey, $emailKey, $passwordKey, &$result) {
             foreach ($rows as $index => $row) {
                 $line = $index + 2; $data = array_combine($headers, array_pad($row, count($headers), null)) ?: [];
-                $classValue = trim(Utf8::clean($data[$classKey] ?? ''));
+                $classValue = $this->normalizeClassValue($data[$classKey] ?? '');
                 $name = trim(Utf8::clean($data[$nameKey] ?? ''));
                 $email = strtolower(trim(Utf8::clean($data[$emailKey] ?? '')));
                 $password = (string) ($data[$passwordKey] ?? '');
                 if ($classValue === '' || $name === '' || $email === '' || $password === '') { $result['errors'][] = "Dòng {$line}: thiếu lớp, tên, email hoặc mật khẩu."; continue; }
-                if (Utf8::containsReplacementMarker($classValue) || Utf8::containsReplacementMarker($name)) {
-                    $result['errors'][] = "Dòng {$line}: tên học sinh hoặc tên lớp chứa ký tự '?' do file đã mất dấu. Hãy lưu lại file ở định dạng CSV UTF-8 hoặc XLSX rồi thử lại.";
+                $replacementFields = [];
+                if (Utf8::containsReplacementMarker($classValue)) {
+                    $replacementFields[] = "tên lớp '{$classValue}'";
+                }
+                if (Utf8::containsReplacementMarker($name)) {
+                    $replacementFields[] = "tên học sinh '{$name}'";
+                }
+                if ($replacementFields !== []) {
+                    $result['errors'][] = "Dòng {$line}: ".implode(' và ', $replacementFields)." chứa ký tự '?' do file đã mất dấu. Hãy lưu lại file ở định dạng CSV UTF-8 hoặc XLSX rồi thử lại.";
                     continue;
                 }
                 $classQuery = Classroom::query()->where('center_id', $actor->center_id)->where(fn ($q) => $q->where('name', $classValue)->orWhere('code', $classValue));
@@ -119,4 +126,24 @@ class StudentClassImportService
     private function header(string $value): string { return Str::of(Utf8::clean($value))->lower()->ascii()->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->value(); }
     private function findHeader(array $headers, array $aliases): ?string { foreach ($aliases as $alias) if (in_array($alias, $headers, true)) return $alias; return null; }
     private function studentCode(User $student): string { return 'STU-'.$student->id; }
+
+    /**
+     * Spreadsheet applications can expose a class code such as 2.3 as the
+     * binary floating-point artifact 2.2999999999999998. Normalize only long
+     * decimal artifacts; ordinary class names/codes remain unchanged.
+     */
+    private function normalizeClassValue(mixed $value): string
+    {
+        $value = trim(Utf8::clean($value));
+
+        if (preg_match('/^-?\d+\.\d{10,}$/', $value) === 1) {
+            $number = (float) $value;
+
+            if (is_finite($number)) {
+                return sprintf('%.15g', $number);
+            }
+        }
+
+        return $value;
+    }
 }
