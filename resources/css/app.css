@@ -293,7 +293,7 @@ body:has(input[aria-label="Tiêu đề bài học"]):has(button[aria-label="Bậ
     .grid.min-h-0.flex-1 { display: block; }
     .grid.min-h-0.flex-1 > aside { display: none; }
     .grid.min-h-0.flex-1 > section { min-height: calc(100dvh - 9rem); }
-    .exam-page { margin: -1rem; padding: .75rem .5rem 5.5rem; }
+    .exam-page { margin: -1rem; padding: .75rem .5rem; }
     .exam-board { border-width: 3px; border-radius: .9rem; }
     .exam-topbar { grid-template-columns: 1fr auto; gap: .75rem; padding: .85rem; }
     .exam-title-block { grid-column: 1 / -1; }
@@ -307,7 +307,7 @@ body:has(input[aria-label="Tiêu đề bài học"]):has(button[aria-label="Bậ
     .exam-passage { margin-bottom: 1rem; }
     .exam-passage-scroll { max-height: 32vh; font-size: .98rem; }
     .exam-question h2 { font-size: 1.08rem; }
-    .exam-footer { position: fixed; right: .5rem; bottom: .5rem; left: .5rem; z-index: 10; display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; border: 1px solid #dbeafe; border-radius: 1rem; padding: .5rem; background: #17324a; box-shadow: 0 8px 24px rgb(4 20 36 / .3); }
+    .exam-footer { position: static; display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; border: 1px solid #dbeafe; border-radius: 1rem; padding: .5rem; background: #17324a; box-shadow: 0 8px 24px rgb(4 20 36 / .3); }
     .exam-footer p { grid-column: 1 / -1; grid-row: 1; width: 100%; font-size: .72rem; }
     .exam-nav-button, .exam-submit { width: 100%; min-height: 44px; justify-content: center; }
     .exam-submit { grid-column: 1 / -1; }
@@ -388,7 +388,7 @@ body:has(input[aria-label="Tiêu đề bài học"]):has(button[aria-label="Bậ
     .exam-footer { grid-row: 5; }
 }
 @media (max-width: 640px) {
-    .exam-page { margin: -1rem; padding: .35rem .25rem 5.25rem; }
+    .exam-page { margin: -1rem; padding: .35rem .25rem .75rem; }
     .exam-board { min-height: calc(100dvh - 1rem); border-width: 3px; border-radius: 1rem; }
     .exam-topbar { grid-template-columns: 1fr auto; padding: .7rem; }
     .exam-progress-wrap { grid-column: 1 / -1; grid-row: 2; }
@@ -402,7 +402,7 @@ body:has(input[aria-label="Tiêu đề bài học"]):has(button[aria-label="Bậ
     .exam-content.is-reading .exam-passage { position: static; max-height: none; overflow: visible; border-left: 0; padding: 0 0 1rem; }
     .exam-content.is-reading .exam-questions { padding-right: 0; padding-left: 0; }
     .exam-questions { padding: 1rem 0 0; }
-    .exam-footer { position: fixed; right: .5rem; bottom: .45rem; left: .5rem; z-index: 10; grid-template-columns: 1fr 1fr; min-height: auto; border: 1px solid #bfdbfe; border-radius: 1rem; padding: .45rem; background: #173b84; box-shadow: 0 10px 28px rgb(1 18 52 / .35); }
+    .exam-footer { position: static; grid-template-columns: 1fr 1fr; min-height: auto; border: 1px solid #bfdbfe; border-radius: 1rem; padding: .45rem; background: #173b84; box-shadow: 0 10px 28px rgb(1 18 52 / .35); }
     .exam-footer p { grid-column: 1 / -1; grid-row: 1; color: #dbeafe; }
     .exam-footer .exam-nav-button { min-height: 44px; }
     .exam-submit { grid-column: 1 / -1; }
