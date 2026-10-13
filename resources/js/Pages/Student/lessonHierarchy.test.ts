@@ -22,13 +22,15 @@ describe('lesson activity hierarchy', () => {
 
     it('keeps listening and writing questions in separate activities within one part', () => {
         const [part] = buildLessonHierarchy([
-            item(1, 'multiple_choice', { section_id: 'part-1', section_title: 'Part I', activity_group_id: 'listen-1', activity_group_type: 'LISTENING', activity_group_title: 'Listening' }),
+            item(1, 'multiple_choice', { section_id: 'part-1', section_title: 'Part I', activity_group_id: 'listen-1', activity_group_type: 'LISTENING', activity_group_title: 'Listening', listening_title: 'The hidden title' }),
             item(2, 'multiple_choice', { section_id: 'part-1', section_title: 'Part I', activity_group_id: 'listen-1', activity_group_type: 'LISTENING', activity_group_title: 'Listening' }),
             item(3, 'open_response', { section_id: 'part-1', section_title: 'Part I', activity_group_id: 'write-1', activity_group_type: 'WRITING', activity_group_title: 'Writing' }),
         ]);
 
         expect(part.activities).toHaveLength(2);
+        expect(part.activities[0].title).toBe('Listening');
         expect(part.activities[0].items.map((candidate) => candidate.id)).toEqual([1, 2]);
+        expect(part.activities[0].items[0].settings_snapshot_json?.listening_title).toBe('The hidden title');
         expect(part.activities[1].items.map((candidate) => candidate.id)).toEqual([3]);
         expect(part.activities[0].items.filter(isQuestion)).toHaveLength(2);
         expect(part.activities[1].items.filter(isQuestion)).toHaveLength(1);

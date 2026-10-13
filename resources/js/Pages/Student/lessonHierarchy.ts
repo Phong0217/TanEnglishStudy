@@ -85,7 +85,9 @@ export const buildLessonHierarchy = (items: LessonItem[]): LessonSection[] => {
         const activityId = String(settings.activity_group_id || settings.listening_group_id || settings.reading_group_id || legacyActivityKey);
         const activity = section.activities.find((candidate) => candidate.id === activityId) || {
             id: activityId,
-            title: String(settings.activity_group_title || settings.listening_title || settings.reading_title || skill.replaceAll('_', ' ')),
+            title: skill === 'LISTENING'
+                ? 'Listening'
+                : String(settings.activity_group_title || settings.reading_title || skill.replaceAll('_', ' ')),
             skill,
             position: Number(settings.activity_position || item.position),
             items: [],

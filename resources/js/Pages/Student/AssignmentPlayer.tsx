@@ -110,7 +110,8 @@ function QuestionInput({ item, value, onChange, readOnly }: { item: Item; value:
 
 function QuestionCard({ item, index, value, answer, readOnly, showResult, onChange }: { item: Item; index: number; value: Json; answer?: Answer; readOnly: boolean; showResult?: boolean; onChange: (value: Json) => void }) {
     const questionImage = mediaUrl(item.content_snapshot_json.question_image_media_id || item.content_snapshot_json.questionImageMediaId, item.content_snapshot_json.question_image_url);
-    return <article className="exam-question"><div className="exam-question-heading"><div><p className="exam-question-number">Câu {index + 1} <span>· {item.points} điểm</span></p><h2>{itemText(item)}</h2></div><Flag size={17} className="text-slate-400" aria-hidden="true" /></div>{questionImage && <img src={questionImage} alt="Minh họa câu hỏi" className="mb-4 max-h-56 w-full rounded-xl object-contain" />}<QuestionInput item={item} value={value} onChange={onChange} readOnly={readOnly} />{showResult && <AnswerReview item={item} answer={answer} />}</article>;
+    const listeningTitle = String(item.settings_snapshot_json?.listening_title || '');
+    return <article className="exam-question">{listeningTitle && <h2 className="mb-3 text-xl font-bold text-slate-900">{listeningTitle}</h2>}<div className="exam-question-heading"><div><p className="exam-question-number">Câu {index + 1} <span>· {item.points} điểm</span></p><h2>{itemText(item)}</h2></div><Flag size={17} className="text-slate-400" aria-hidden="true" /></div>{questionImage && <img src={questionImage} alt="Minh họa câu hỏi" className="mb-4 max-h-56 w-full rounded-xl object-contain" />}<QuestionInput item={item} value={value} onChange={onChange} readOnly={readOnly} />{showResult && <AnswerReview item={item} answer={answer} />}</article>;
 }
 
 function ListeningExampleCard({ example }: { example?: Json | null }) {

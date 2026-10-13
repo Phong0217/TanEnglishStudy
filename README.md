@@ -21,6 +21,17 @@ Use `--seed` only for a new local database. On later starts run `./scripts/docke
 
 The application source is baked into the image (it is not bind-mounted). After changing Laravel or React code, run `./scripts/docker-up.sh` so the app/queue/scheduler images are rebuilt and recreated; `docker compose restart app` alone only restarts the previous image.
 
+On a server where the optional MinIO images cannot be pulled, update the application without starting MinIO:
+
+```bash
+docker compose up -d mysql redis
+docker compose build --no-cache app queue scheduler
+docker compose up -d --no-deps --force-recreate app queue scheduler
+docker compose exec app php artisan migrate --force
+```
+
+The no-cache build recompiles the Vite assets as well as the PHP image. Do not use `docker compose up -d` without service names for this update, as that also starts optional services such as MinIO.
+
 The local seed creates `admin@example.com`, `teacher1@example.com`, `teacher2@example.com`, and `student1@example.com` through `student10@example.com`, each with password `password`. These credentials are local/testing only. In a real environment use `php artisan app:create-admin`, which prompts for name, email, password and confirmation, checks duplicates, assigns `ADMIN`, and never logs the password.
 
 ## Running and services
