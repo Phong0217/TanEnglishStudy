@@ -7,6 +7,7 @@ type Block = { id?: number; block_type: string; content_json: Record<string, unk
 const blockSkill = (block: Block) => { const explicit = String(block.settings_json?.activity_group_type || block.settings_json?.skill || '').toUpperCase(); if (explicit && explicit !== 'MIXED') return explicit; return (['listening_question', 'audio'].includes(block.block_type) ? 'LISTENING' : ['reading_passage', 'reading_comprehension'].includes(block.block_type) ? 'READING' : block.block_type === 'open_response' ? 'WRITING' : block.block_type === 'speaking_prompt' ? 'SPEAKING' : block.block_type === 'grammar_explanation' ? 'GRAMMAR' : block.block_type === 'vocabulary' ? 'VOCABULARY' : 'PRACTICE'); };
 
 const activityKey = (block: Block, index: number) => String(block.settings_json?.activity_group_id || block.settings_json?.listening_group_id || block.settings_json?.reading_group_id || `activity:${blockSkill(block)}:${block.id || index}`);
+const sameText = (left: unknown, right: unknown) => String(left || '').trim().toLocaleLowerCase() === String(right || '').trim().toLocaleLowerCase();
 
 function ActivityRenderer({ activity }: { activity: { title: string; skill: string; blocks: Block[] } }) {
     const reading = activity.skill === 'READING';
@@ -31,10 +32,16 @@ function renderActivities(children: Block[]) {
 
 function Render({ block }: { block: Block }) {
     const c = block.content_json;
-    if (block.block_type === 'section') { const groups = renderActivities((c.children as Block[]) || []); return <section className="rounded-2xl border-2 border-indigo-100 bg-indigo-50/40 p-5 sm:p-7"><div className="mb-5 border-b border-indigo-100 pb-4"><p className="text-xs font-bold uppercase tracking-[.16em] text-indigo-600">{String(c.skill || 'MIXED')}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{String(c.title || 'Part')}</h2>{c.subtitle != null && <p className="mt-2 text-sm text-slate-600">{String(c.subtitle)}</p>}</div><div className="space-y-5">{groups.map((activity) => <ActivityRenderer key={activity.id} activity={activity} />)}</div></section>; }
+    if (block.block_type === 'section') {
+        const children = (c.children as Block[]) || [];
+        const groups = renderActivities(children);
+        const listeningTitles = children.filter((child) => child.block_type === 'listening_question').map((child) => child.content_json.title);
+        const sectionTitle = listeningTitles.some((title) => sameText(title, c.title)) ? 'Part' : String(c.title || 'Part');
+        return <section className="rounded-2xl border-2 border-indigo-100 bg-indigo-50/40 p-5 sm:p-7"><div className="mb-5 border-b border-indigo-100 pb-4"><p className="text-xs font-bold uppercase tracking-[.16em] text-indigo-600">{String(c.skill || 'MIXED')}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{sectionTitle}</h2>{c.subtitle != null && !listeningTitles.some((title) => sameText(title, c.subtitle)) && <p className="mt-2 text-sm text-slate-600">{String(c.subtitle)}</p>}</div><div className="space-y-5">{groups.map((activity) => <ActivityRenderer key={activity.id} activity={activity} />)}</div></section>;
+    }
     if (block.block_type === 'heading') return <h2 className="text-2xl font-semibold">{String(c.text ?? '')}</h2>;
     if (block.block_type === 'rich_text') return <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: String(c.html ?? '') }} />;
-    if (block.block_type === 'listening_question') return <div><h4 className="text-lg font-semibold text-slate-900">{String(c.title || 'Listening questions')}</h4>{c.instructions != null && <p className="mt-2 text-sm text-slate-600">{String(c.instructions)}</p>}<p className="mt-3 text-sm text-slate-500">Complete interactive questions inside an assignment.</p></div>;
+    if (block.block_type === 'listening_question') return <div><h4 className="text-lg font-semibold text-slate-900">{String(c.title || 'Listening questions')}</h4>{c.instructions != null && !sameText(c.instructions, c.title) && <p className="mt-2 text-sm text-slate-600">{String(c.instructions)}</p>}<p className="mt-3 text-sm text-slate-500">Complete interactive questions inside an assignment.</p></div>;
     if (block.block_type === 'reading_passage') return <div><h3 className="text-lg font-semibold">{String(c.title ?? 'Reading passage')}</h3><p className="mt-3 whitespace-pre-wrap leading-7 text-slate-700">{String(c.passage ?? c.html ?? '')}</p>{c.instructions != null && <p className="mt-3 text-sm text-slate-500">{String(c.instructions)}</p>}</div>;
     if (block.block_type === 'grammar_explanation') return <div><h3 className="text-lg font-semibold">{String(c.title ?? 'Grammar explanation')}</h3><div className="prose mt-3 max-w-none" dangerouslySetInnerHTML={{ __html: String(c.explanation ?? c.html ?? '') }} /></div>;
     if (block.block_type === 'divider') return <hr />;
